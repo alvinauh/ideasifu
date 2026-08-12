@@ -1,0 +1,18 @@
+# IdeaSifu web tier: serves the built SPA and reverse-proxies /api/* to the API
+# container on the same origin (no CORS, works however the host is reached).
+:80 {
+	encode gzip
+
+	# /api/* -> API container, with the /api prefix stripped so backend routes
+	# stay at root (/generate-ideas, /more-ideas, /build, /refine, /health).
+	handle_path /api/* {
+		reverse_proxy ideasifu-api:8000
+	}
+
+	# Everything else: static SPA with client-side routing fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

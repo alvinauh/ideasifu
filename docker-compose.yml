@@ -1,0 +1,56 @@
+# IdeaSifu — standalone stack (own compose project + own network "ideasifu_net").
+# Ports 8004/8005 are unused by the siblings (8002=thesissifu, 8003=thesiscoach).
+#
+# Two deliberate couplings to the thesissifu stack (both join the external
+# `thesissifu_project_default` network), user-approved:
+#   1. `ideasifu-api` -> ThesisSifu `/search` for the Corpus tab (Qdrant search).
+#   2. `ideasifu-web` <- ThesisSifu's Caddy, which reverse-proxies the public
+#      subdomain idea.thesissifu.com to it over HTTPS (box high-ports are
+#      firewalled off the internet; only 80/443 are open).
+# Everything else stays self-contained on `ideasifu_net`.
+name: ideasifu
+
+services:
+  ideasifu-api:
+    build: ./backend
+    container_name: ideasifu-api
+    environment:
+      # Passed through from the environment by start.sh (sourced from
+      # kuasaprestij's .env). Empty -> backend runs in graceful mock mode.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # ThesisSifu's /search, reachable on the shared network below. If the
+      # thesissifu stack is absent, the Corpus tab degrades gracefully.
+      THESISSIFU_SEARCH_URL: ${THESISSIFU_SEARCH_URL:-http://api:8000/search}
+    ports:
+      - "8005:8000"   # direct API access (/docs, /health)
+    networks:
+      - ideasifu
+      - thesissifu
+    restart: unless-stopped
+
+  ideasifu-web:
+    build: ./frontend
+    container_name: ideasifu-web
+    depends_on:
+      - ideasifu-api
+    ports:
+      - "8004:80"     # main entry: UI + same-origin /api proxy
+    networks:
+      - ideasifu
+      # Also on ThesisSifu's network so its Caddy (on the open :443) can reverse
+      # proxy the public subdomain (idea.thesissifu.com) to this container. The
+      # box's high ports (8004) are firewalled off the internet, so public access
+      # goes through that Caddy over HTTPS instead.
+      - thesissifu
+    restart: unless-stopped
+
+networks:
+  ideasifu:
+    name: ideasifu_net
+  # External network owned by the thesissifu stack; joined read-only by
+  # ideasifu-api to reach ThesisSifu's /search. Must already exist (it does, as
+  # long as the thesissifu stack is up). Does not touch any thesissifu container.
+  thesissifu:
+    name: thesissifu_project_default
+    external: true

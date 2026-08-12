@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/*
+ * IdeaSifu design tokens — sibling of ThesisSifu / IEG learning apps.
+ * Dark-first, deep-violet canvas, electric-violet primary, agent-coded accents.
+ * Identity vs ThesisSifu: ideation gradient (violet -> cyan) + amber "spark",
+ * where ThesisSifu leans audit-red.
+ */
+
+@theme {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  --radius: 0.875rem;
+
+  /* Core surfaces */
+  --color-background: oklch(0.15 0.02 285);
+  --color-surface: oklch(0.19 0.025 285);
+  --color-surface-2: oklch(0.23 0.03 285);
+  --color-foreground: oklch(0.98 0.005 285);
+  --color-muted: oklch(0.68 0.03 285);
+  --color-border: oklch(0.3 0.03 285);
+
+  /* Primary (shared family signature) */
+  --color-primary: oklch(0.65 0.24 295);
+  --color-primary-foreground: oklch(0.98 0.005 285);
+  --color-primary-glow: oklch(0.72 0.22 290);
+
+  /* Agent accent hues — each Sifu owns one */
+  --color-scout: oklch(0.75 0.16 210);       /* cyan   — discovery / web crawl */
+  --color-ideator: oklch(0.65 0.24 295);     /* violet — ideation (== primary) */
+  --color-cartographer: oklch(0.78 0.18 165);/* teal   — mind mapping */
+  --color-librarian: oklch(0.82 0.16 85);    /* amber  — sources / "spark" */
+  --color-director: oklch(0.72 0.22 350);    /* pink   — video summary */
+
+  /* Semantic */
+  --color-success: oklch(0.78 0.2 150);
+  --color-warning: oklch(0.82 0.17 75);
+  --color-danger: oklch(0.66 0.24 25);
+
+  /* Mind-map node types */
+  --color-node-thesis: oklch(0.65 0.24 295);
+  --color-node-argument: oklch(0.75 0.16 210);
+  --color-node-evidence: oklch(0.78 0.18 165);
+  --color-node-counter: oklch(0.82 0.17 75);
+  --color-node-question: oklch(0.72 0.22 350);
+}
+
+:root {
+  --gradient-idea: linear-gradient(135deg, oklch(0.65 0.24 295), oklch(0.75 0.16 210));
+  --gradient-glow: radial-gradient(circle at 50% 0%, oklch(0.65 0.24 295 / 0.28), transparent 62%);
+  --shadow-glow: 0 0 32px oklch(0.65 0.24 295 / 0.4);
+  --shadow-card: 0 8px 32px oklch(0 0 0 / 0.45);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv02", "cv03", "cv11";
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: var(--gradient-idea);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .bg-gradient-idea { background: var(--gradient-idea); }
+  .glow { box-shadow: var(--shadow-glow); }
+  .card-shadow { box-shadow: var(--shadow-card); }
+
+  /* Purposeful motion — respects reduced-motion */
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+    50% { opacity: 0.85; box-shadow: 0 0 18px 2px currentColor; }
+  }
+  .animate-pulse-glow { animation: pulse-glow 1.6s ease-in-out infinite; }
+
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-rise-in { animation: rise-in 0.4s ease both; }
+
+  @keyframes dash {
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
