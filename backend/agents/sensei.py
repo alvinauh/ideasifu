@@ -73,30 +73,71 @@ SECTIONS: dict[str, dict] = {
         "heading_en": "Chapter 1: Introduction",
         "heading_bm": "Bab 1: Pengenalan",
         "purpose": (
-            "Set the background and context, state the problem, establish the "
-            "significance and scope, and lead naturally into the research questions."
+            "Write a full introduction chapter with the following structure — each "
+            "section should be substantive, not a single sentence:\n"
+            "  1. BACKGROUND — establish the broad context with evidence; cite corpus "
+            "papers to show the prevalence or significance of the problem. Do not "
+            "just assert that the topic is important — demonstrate it with specifics "
+            "from the literature.\n"
+            "  2. PROBLEM STATEMENT — articulate the specific gap or deficiency. "
+            "Critically note why existing studies have not resolved it: name specific "
+            "papers, state what they investigated, and explain exactly what they "
+            "failed to examine or whom they failed to include.\n"
+            "  3. SIGNIFICANCE — explain the theoretical and practical value of "
+            "addressing this gap; tie the significance to the research questions.\n"
+            "  4. SCOPE AND LIMITATIONS — clarify the boundaries of the study.\n"
+            "  5. RESEARCH QUESTIONS — restate them as they will guide the study.\n"
+            "Throughout, cite corpus papers not as decoration but as evidence: state "
+            "what each cited study found and how it supports or motivates your argument."
         ),
-        "words": 700,
+        "words": 1000,
     },
     "literature_review": {
         "heading_en": "Chapter 2: Literature Review",
         "heading_bm": "Bab 2: Tinjauan Literatur",
         "purpose": (
-            "Synthesise (do NOT merely list) prior work into themes, show where "
-            "scholars agree and disagree, and surface the gap the study addresses. "
-            "Cite the provided corpus papers by title/author where they fit."
+            "Organise the review into 3–4 thematic sub-sections tied to the research "
+            "questions. Within each theme, CRITICALLY ENGAGE with each corpus paper "
+            "you cite — do ALL four of the following for every paper:\n"
+            "  (a) STATE the specific findings or argument of that study (not just "
+            "its topic — what exactly did it find or claim?);\n"
+            "  (b) ANALYSE the methodology — what design did it use, what was the "
+            "sample, what are the strengths and weaknesses of that approach?;\n"
+            "  (c) CRITIQUE at least one concrete limitation of that study (e.g. "
+            "small sample, single context, cross-sectional design, self-report bias, "
+            "limited generalisability);\n"
+            "  (d) CONNECT it explicitly to the research questions — does it support, "
+            "contradict, or leave unanswered what this study seeks to find out?\n"
+            "Show where scholars agree, where they diverge, and why the divergences "
+            "matter for the current study. End with a synthesis paragraph that names "
+            "the specific gap in the literature and maps it directly onto each "
+            "research question."
         ),
-        "words": 750,
+        "words": 1400,
     },
     "methodology": {
         "heading_en": "Chapter 3: Methodology",
         "heading_bm": "Bab 3: Metodologi",
         "purpose": (
-            "Justify a research design, describe participants/sample, instruments, "
-            "data-collection procedure, and analysis plan, tying each choice back "
-            "to the research questions. State validity/reliability and ethics."
+            "Write a full methodology chapter with the following components:\n"
+            "  1. RESEARCH DESIGN — justify the chosen approach (qualitative, "
+            "quantitative, or mixed). Cite corpus papers that used a similar design "
+            "and explain why that design suits the research questions; also "
+            "acknowledge the limitations of the chosen design.\n"
+            "  2. PARTICIPANTS / SAMPLE — describe the target population, sampling "
+            "strategy, sample size (and justify it with reference to similar studies "
+            "or power analysis), and inclusion/exclusion criteria.\n"
+            "  3. INSTRUMENTS / DATA SOURCES — for each instrument, cite the study "
+            "that developed or validated it, report its reliability (Cronbach's alpha "
+            "or equivalent), and explain why it operationalises the relevant construct "
+            "in the research questions.\n"
+            "  4. PROCEDURE — describe data collection step by step.\n"
+            "  5. DATA ANALYSIS — specify the analysis technique and connect each "
+            "technique to the research question it addresses.\n"
+            "  6. VALIDITY, RELIABILITY, AND ETHICS — state strategies used and "
+            "any ethical considerations."
         ),
-        "words": 700,
+        "words": 1000,
     },
     "results": {
         "heading_en": "Chapter 4: Results",
@@ -112,22 +153,31 @@ SECTIONS: dict[str, dict] = {
             "means, SDs, n, and a test statistic with p-value where the design "
             "implies one). State clearly at the top that the data are simulated and "
             "for illustration. Report neutrally — do NOT interpret; interpretation "
-            "belongs in the Discussion."
+            "belongs in the Discussion. Devote a separate sub-section to each "
+            "research question so the reader can see exactly how each one was answered."
         ),
-        "words": 900,
+        "words": 1100,
     },
     "discussion": {
         "heading_en": "Chapter 5: Discussion",
         "heading_bm": "Bab 5: Perbincangan",
         "purpose": (
-            "Interpret the SIMULATED findings from the Results chapter against the "
-            "literature: cite plausible simulated figures (means/effects/themes) as "
-            "you answer each research question explicitly, state theoretical and "
-            "practical implications, acknowledge limitations (including that the "
-            "findings rest on simulated, illustrative data, not real fieldwork), and "
-            "recommend future work."
+            "Write a full discussion chapter addressing each research question in a "
+            "dedicated sub-section. For each research question:\n"
+            "  (a) INTERPRET the simulated finding — what does it mean?;\n"
+            "  (b) COMPARE to corpus papers — do the simulated results align with or "
+            "diverge from what those studies found? Be specific: name the paper, "
+            "state its finding, and explain the agreement or divergence;\n"
+            "  (c) EXPLAIN the divergence or alignment — differences in methodology, "
+            "sample, context, or theoretical framework;\n"
+            "  (d) STATE implications — what does this mean theoretically and "
+            "practically for the field?\n"
+            "Critically engage with at least 2 corpus papers per research question. "
+            "After addressing all RQs, write sub-sections on: Limitations of the "
+            "study (including the simulated nature of the data), Recommendations for "
+            "practice, and Directions for future research."
         ),
-        "words": 750,
+        "words": 1200,
     },
 }
 
@@ -157,34 +207,36 @@ _LANG = {
 }
 
 _SYSTEM = (
-    "You are Sensei, the thesis writer of the IdeaSifu Dojo. Given a student's "
-    "research questions, you WRITE UP a strong sample of a thesis section that "
-    "directly answers those questions — in finished academic prose, not advice. "
-    "Do NOT explain how to write the section, do NOT give the student instructions "
-    "or tips, and do NOT address the student; simply produce the write-up itself, "
-    "as it would appear in the thesis. You ground every section in the research "
-    "questions provided and in the real corpus papers you are given — you weave "
-    "those in honestly and never invent a citation you were not given. "
-    "For the Title section specifically: produce titles that are precise, specific "
-    "to the population and context, and appropriate for the degree level — avoid "
-    "generic phrasing and ensure your justification is critical and detailed. "
-    "Respect the word cap for all other sections; a focused, well-structured "
-    "sample beats long and padded."
+    "You are Sensei, the thesis writer of the IdeaSifu Dojo. You write finished "
+    "academic thesis sections — real prose as it would appear in the thesis, never "
+    "advice or instructions to the student.\n\n"
+    "CRITICAL ENGAGEMENT IS MANDATORY. For every corpus paper you cite:\n"
+    "  • State what that study specifically found or argued (not just its topic).\n"
+    "  • Evaluate how it was done — the design, sample, and analytical approach.\n"
+    "  • Identify a concrete limitation of that study.\n"
+    "  • Connect it explicitly to the research questions — what it tells us and "
+    "what it leaves unanswered.\n"
+    "Never drop a citation without this dissection. Weave papers into paragraph-level "
+    "arguments; do not list them. Never fabricate a citation not given to you.\n\n"
+    "Do NOT address the student. Do NOT give writing tips. Write the section itself."
 )
 
 _SYSTEM_PRO = (
-    "You are Sensei, the thesis writer of the IdeaSifu Dojo. Given a student's "
-    "research questions, you WRITE a complete, full-length thesis chapter that "
-    "directly answers those questions — in finished academic prose, not advice. "
-    "Do NOT explain how to write the section, do NOT give the student instructions "
-    "or tips, and do NOT address the student; simply produce the chapter itself, "
-    "as it would appear in the final thesis. You ground every section in the "
-    "research questions provided and in the real corpus papers you are given — "
-    "weave those in honestly and never invent a citation you were not given. "
-    "You MUST meet the minimum word count stated in the user message — it is a "
-    "hard floor, not a suggestion. Write with depth: expand every argument, add "
-    "sub-section headings, provide concrete examples from the corpus, explain "
-    "implications, and keep going until you have genuinely reached the minimum."
+    "You are Sensei, the thesis writer of the IdeaSifu Dojo. You write complete, "
+    "full-length thesis chapters — real prose as it would appear in the final thesis, "
+    "never advice or instructions to the student.\n\n"
+    "CRITICAL ENGAGEMENT IS MANDATORY. For every corpus paper you cite:\n"
+    "  • State what that study specifically found or argued (not just its topic).\n"
+    "  • Evaluate the methodology — design, sample, strengths, and weaknesses.\n"
+    "  • Identify a concrete limitation of that study.\n"
+    "  • Connect it explicitly to the research questions — what it contributes and "
+    "what gap it leaves that the current study fills.\n"
+    "Never drop a citation without this dissection. Weave papers into paragraph-level "
+    "arguments; do not list them. Never fabricate a citation not given to you.\n\n"
+    "You MUST meet the minimum word count — it is a hard floor. Write with full depth: "
+    "develop every argument, use sub-section headings, engage each corpus paper "
+    "critically, explain all implications. Do NOT stop before the minimum is reached.\n\n"
+    "Do NOT address the student. Do NOT give writing tips. Write the chapter itself."
 )
 
 
@@ -192,19 +244,25 @@ def _corpus_block(examples: list[DojoCorpusExample]) -> str:
     if not examples:
         return (
             "CORPUS PAPERS: (none retrieved — write from the research questions "
-            "alone, and do NOT fabricate specific citations; refer to literature "
-            "in general terms instead.)"
+            "alone; do NOT fabricate specific citations; refer to literature in "
+            "general terms only.)"
         )
     lines = []
     for e in examples:
         cite = e.reference or e.title
-        tag = f"  → cite in-text as {e.intext}" if e.intext else ""
-        lines.append(f"- {cite}{tag}")
+        intext = f"\n  → In-text citation: {e.intext}" if e.intext else ""
+        abstract = f"\n  → Abstract: {e.abstract}" if e.abstract else ""
+        lines.append(f"- {cite}{intext}{abstract}\n")
     return (
-        "CORPUS PAPERS (real references from the ThesisSifu academic corpus). When "
-        "you draw on one, cite it in-text using EXACTLY the APA short form shown "
-        "after it (e.g. (Tan & Lim, 2022)) — never list every author in-text. Do "
-        "not invent other sources:\n"
+        "CORPUS PAPERS (real references from the ThesisSifu academic corpus).\n\n"
+        "For EACH paper you draw on, you MUST critically engage — do not just cite it:\n"
+        "  1. State what the study found or argued (use the abstract — be specific).\n"
+        "  2. Comment on its methodology, sample, or scope.\n"
+        "  3. Identify a limitation of that study.\n"
+        "  4. Explain how it relates to the research questions.\n"
+        "Cite in-text using EXACTLY the APA short form shown (e.g. (Tan & Lim, 2022)).\n"
+        "Do NOT invent sources not listed here.\n\n"
+        "PAPERS:\n"
         + "\n".join(lines)
     )
 
@@ -220,7 +278,7 @@ def write_section(
 
     heading = meta["heading_bm"] if req.language == "bm" else meta["heading_en"]
     free_cap = meta["words"]
-    pro_min = max(400, int(free_cap * 1.5))  # floor: 400 w; typical: 1050-1350 w
+    pro_min = max(800, int(free_cap * 2.2))  # floor: 800 w; typical: 2200-3100 w
     cap = pro_min if req.pro else free_cap
     system = _SYSTEM_PRO if req.pro else _SYSTEM
 
@@ -259,9 +317,8 @@ def write_section(
         f"- word_count: your best estimate of the content word count (integer)"
     )
 
-    # Pro: generous token budget (~2 tokens/word + schema headroom).
-    # Free: tighter cap keeps responses focused.
-    max_tokens = int(cap * 2.5) + 600 if req.pro else int(cap * 2.4) + 400
+    # ~2 tokens/word on average for academic prose; add headroom for JSON wrapper.
+    max_tokens = int(cap * 2.6) + 900 if req.pro else int(cap * 2.6) + 600
     out = generate(system, user, _SenseiOutput, pro=req.pro, max_tokens=max_tokens)
 
     # The app owns every field except the writeup itself.

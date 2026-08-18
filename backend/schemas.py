@@ -188,6 +188,7 @@ class DojoCorpusExample(BaseModel):
     doi: Optional[str] = Field(None, description="DOI URL, if the record has one")
     reference: str = Field("", description="Full APA-style citation, ready to render")
     intext: str = Field("", description="APA in-text citation form, e.g. '(Tan & Lim, 2022)'")
+    abstract: str = Field("", description="Abstract snippet (~180 words) for critical grounding")
 
 
 class DojoSectionResult(BaseModel):

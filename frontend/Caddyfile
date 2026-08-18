@@ -14,5 +14,14 @@
 		root * /srv
 		try_files {path} /index.html
 		file_server
+
+		# index.html must never be cached — Cloudflare or browsers holding a
+		# stale copy means users run old JS after a deploy.
+		@html path *.html /
+		header @html Cache-Control "no-store, must-revalidate"
+
+		# Vite hashes JS/CSS filenames, so they're safe to cache forever.
+		@assets path *.js *.css *.woff2 *.woff *.ttf *.svg *.png *.ico
+		header @assets Cache-Control "public, max-age=31536000, immutable"
 	}
 }

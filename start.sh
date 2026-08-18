@@ -22,6 +22,11 @@ fi
 [[ -z "${OPENROUTER_API_KEY:-}" ]] && echo "WARN: OPENROUTER_API_KEY is empty." >&2
 [[ -z "${DEEPSEEK_API_KEY:-}" ]] && echo "WARN: DEEPSEEK_API_KEY is empty — Pro tier will fall back to free models." >&2
 
+# Build the frontend SPA first — the web Docker image just COPYs dist/, so
+# the JS must be compiled on the host before the image is rebuilt.
+echo "Building frontend..."
+(cd frontend && VITE_API_BASE_URL=/api npm run build)
+
 docker compose up -d --build
 
 echo

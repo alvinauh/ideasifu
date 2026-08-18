@@ -236,8 +236,25 @@ def _apa_reference(m: dict, authors: str) -> str:
     return " ".join(parts).strip()
 
 
+def _decode_abstract(inv_index: dict | None) -> str:
+    """Reconstruct abstract text from OpenAlex's inverted index format."""
+    if not inv_index:
+        return ""
+    words: dict[int, str] = {}
+    for word, positions in inv_index.items():
+        for pos in positions:
+            words[pos] = word
+    if not words:
+        return ""
+    text = " ".join(words[i] for i in sorted(words))
+    parts = text.split()
+    if len(parts) > 180:
+        text = " ".join(parts[:180]) + "…"
+    return text
+
+
 async def _enrich_corpus(corpus: list[DojoCorpusExample]) -> None:
-    """Populate authors/year/venue/doi/reference on each example, in place."""
+    """Populate authors/year/venue/doi/reference/abstract on each example, in place."""
     ids = [_oa_short_id(c.openalex_id) for c in corpus if c.openalex_id]
     ids = [i for i in ids if i]
     if not ids:
@@ -245,7 +262,7 @@ async def _enrich_corpus(corpus: list[DojoCorpusExample]) -> None:
     params = {
         "filter": "openalex:" + "|".join(ids),
         "per-page": str(min(len(ids), 50)),
-        "select": "id,title,publication_year,authorships,primary_location,biblio,doi",
+        "select": "id,title,publication_year,authorships,primary_location,biblio,doi,abstract_inverted_index",
         "mailto": OPENALEX_MAILTO,
     }
     try:
@@ -274,6 +291,7 @@ async def _enrich_corpus(corpus: list[DojoCorpusExample]) -> None:
             "first_page": bib.get("first_page"),
             "last_page": bib.get("last_page"),
             "doi": w.get("doi"),
+            "abstract": _decode_abstract(w.get("abstract_inverted_index")),
         }
 
     for c in corpus:
@@ -287,6 +305,7 @@ async def _enrich_corpus(corpus: list[DojoCorpusExample]) -> None:
         c.doi = m.get("doi")
         c.reference = _apa_reference(m, authors)
         c.intext = _intext_cite(m.get("authors") or [], m.get("year"))
+        c.abstract = m.get("abstract") or ""
 
 
 def _dojo_corpus_query(req: DojoGenerateRequest) -> str:
@@ -325,7 +344,7 @@ async def dojo_generate(req: DojoGenerateRequest) -> DojoSectionResult:
             )
 
     corpus: list[DojoCorpusExample] = []
-    hits = await _corpus_search(_dojo_corpus_query(req), top_k=6)
+    hits = await _corpus_search(_dojo_corpus_query(req), top_k=10)
     if hits.status == "ok":
         corpus = [
             DojoCorpusExample(
