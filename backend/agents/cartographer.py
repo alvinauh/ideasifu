@@ -16,8 +16,7 @@ _SYSTEM = (
     "You are Cartographer, the map-maker of the IdeaSifu crew. You turn a "
     "chosen idea into a navigable critical-thinking mind map. The map is the "
     "intellectual heart of the product, so it follows strict pedagogy:\n"
-    "- Exactly ONE root node (type 'thesis' for university, 'question' for "
-    "high school) with parent=None.\n"
+    "- Exactly ONE root node (type 'thesis') with parent=None.\n"
     "- Several 'argument' nodes hanging off the root (supporting lines of "
     "reasoning).\n"
     "- 'evidence' nodes under arguments (facts/data to go find and verify).\n"
@@ -33,14 +32,6 @@ _SYSTEM = (
 
 
 def _tier_guidance(brief: Brief) -> str:
-    if brief.tier == "highschool":
-        return (
-            "TIER: HIGH SCHOOL. Root node type is 'question'. Use plain, "
-            "concrete language. Frame arguments as 'reasons', evidence as "
-            "'examples you could find', counters as 'someone might say...'. "
-            "Keep prompts warm and encouraging, e.g. 'What example would show "
-            "this is true?'"
-        )
     return (
         "TIER: UNIVERSITY. Root node type is 'thesis'. Use an academic "
         "register. Arguments are lines of reasoning, evidence points to "
@@ -77,7 +68,7 @@ def map_idea(brief: Brief, idea: IdeaCandidate) -> MindMap:
 def _ensure_valid(mind_map: MindMap, brief: Brief, idea: IdeaCandidate) -> None:
     """Guardrail: guarantee a root and at least one counter node exist."""
     if not mind_map.nodes:
-        root_type = "question" if brief.tier == "highschool" else "thesis"
+        root_type = "thesis"
         mind_map.nodes.append(
             MindMapNode(
                 id="n1",

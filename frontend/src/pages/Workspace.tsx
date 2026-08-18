@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Lightbulb,
   Network,
@@ -11,11 +11,13 @@ import {
   Save,
   Check,
   Loader2,
+  Share2,
+  Users,
 } from "lucide-react";
 import MindMap from "@/components/MindMap";
 import SourcesPanel from "@/components/SourcesPanel";
 import VideoPlayer from "@/components/VideoPlayer";
-import { store, useStore } from "@/lib/store";
+import { store, useStore, getOrCreateToken } from "@/lib/store";
 import { useTier } from "@/lib/tier";
 import * as api from "@/lib/api";
 
@@ -34,11 +36,13 @@ export default function Workspace() {
   const current = useStore((s) => s.current);
   const brief = useStore((s) => s.brief);
 
+  const sharedIdeaIds = useStore((s) => s.sharedIdeaIds); // reactive — re-renders when markIdeaShared fires
   const [tab, setTab] = useState<Tab>("idea");
   const [highlightSource, setHighlightSource] = useState<string | null>(null);
   const [nudge, setNudge] = useState("");
   const [refining, setRefining] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (!current) navigate("/", { replace: true });
@@ -81,6 +85,20 @@ export default function Workspace() {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  async function handleShare() {
+    if (!current) return;
+    setSharing(true);
+    try {
+      const token = getOrCreateToken();
+      await api.shareIdea(token, current.idea);
+      store.markIdeaShared(current.idea.id);
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  const isShared = current ? sharedIdeaIds.has(current.idea.id) : false;
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       {/* Header = contextualized idea */}
@@ -101,22 +119,46 @@ export default function Workspace() {
               {idea.statement}
             </p>
           </div>
-          <button
-            onClick={handleSave}
-            className="flex shrink-0 items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {saved ? (
-              <>
-                <Check className="h-4 w-4 text-[color:var(--color-success)]" aria-hidden />
-                Saved
-              </>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {isShared ? (
+              <Link
+                to="/community"
+                className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Users className="h-4 w-4" aria-hidden />
+                View in Community
+              </Link>
             ) : (
-              <>
-                <Save className="h-4 w-4" aria-hidden />
-                Save to Library
-              </>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                className="flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+              >
+                {sharing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Share2 className="h-4 w-4" aria-hidden />
+                )}
+                Share
+              </button>
             )}
-          </button>
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {saved ? (
+                <>
+                  <Check className="h-4 w-4 text-[color:var(--color-success)]" aria-hidden />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" aria-hidden />
+                  Save to Library
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-3">

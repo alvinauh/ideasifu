@@ -22,14 +22,6 @@ _SYSTEM = (
 
 
 def _tier_guidance(brief: Brief) -> str:
-    if brief.tier == "highschool":
-        return (
-            "TIER: HIGH SCHOOL. Keep the language plain, concrete and "
-            "encouraging. Hooks should connect to things a teenager can picture "
-            "— everyday life, local examples, striking numbers, human stories. "
-            "Debates should be framed as questions people genuinely disagree "
-            "about, in accessible words."
-        )
     return (
         "TIER: UNIVERSITY. Use an academic register and be discipline-aware. "
         "Hooks should point toward scholarly relevance, methodological angles, "

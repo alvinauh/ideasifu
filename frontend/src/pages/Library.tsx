@@ -45,7 +45,7 @@ export default function Library() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted">
-                  {entry.brief.tier === "university" ? "University" : "High school"}
+                  University
                 </span>
                 <button
                   onClick={() => store.removeFromLibrary(entry.key)}

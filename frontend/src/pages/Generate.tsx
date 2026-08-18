@@ -46,9 +46,9 @@ export default function Generate() {
     setStatus((prev) => ({ ...prev, [id]: s }));
   }, []);
 
-  // If someone lands here without a brief, send them home.
+  // If someone lands here without a brief, send them to the form.
   useEffect(() => {
-    if (!brief) navigate("/", { replace: true });
+    if (!brief) navigate("/start", { replace: true });
   }, [brief, navigate]);
 
   // Kick off generation once.
@@ -113,7 +113,7 @@ export default function Generate() {
           <span className="text-gradient">{brief.subject}</span>
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {brief.tier === "university" ? "University" : "High school"} ·{" "}
+          University ·{" "}
           {brief.level} · {labelForAssignment(brief.assignment_type)}
         </p>
       </div>

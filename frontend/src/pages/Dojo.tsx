@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   GraduationCap,
   Loader2,
@@ -9,9 +10,12 @@ import {
   Copy,
   Check,
   RotateCcw,
+  Coins,
+  Users,
 } from "lucide-react";
 import * as api from "@/lib/api";
 import { USING_MOCK } from "@/lib/api";
+import { store, useStore, getOrCreateToken } from "@/lib/store";
 import type {
   DojoDegree,
   DojoLang,
@@ -50,6 +54,7 @@ interface DojoState {
   researchQuestions: string;
   notes: Partial<Record<SectionKey, string>>;
   results: Partial<Record<SectionKey, DojoSectionResult>>;
+  pro: boolean;
 }
 
 const STORAGE_KEY = "ideasifu.dojo";
@@ -62,6 +67,7 @@ function loadState(): DojoState {
     researchQuestions: "",
     notes: {},
     results: {},
+    pro: false,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -70,6 +76,36 @@ function loadState(): DojoState {
   } catch {
     return base;
   }
+}
+
+function QuotaBadge({ quota, credits }: { quota: number; credits: number }) {
+  if (quota > 0) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm">
+        <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+        <span className="font-semibold">{quota}</span>
+        <span className="text-muted">free {quota === 1 ? "section" : "sections"} left</span>
+      </div>
+    );
+  }
+  if (credits > 0) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 text-sm">
+        <Coins className="h-3.5 w-3.5 text-amber-500" aria-hidden />
+        <span className="font-semibold">{credits}</span>
+        <span className="text-muted">credit{credits !== 1 ? "s" : ""} remaining</span>
+      </div>
+    );
+  }
+  return (
+    <Link
+      to="/community"
+      className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-muted transition-colors hover:text-primary focus:outline-none"
+    >
+      <Users className="h-3.5 w-3.5" aria-hidden />
+      No quota — earn credits
+    </Link>
+  );
 }
 
 /** Minimal markdown-lite renderer: paragraphs, **bold**, *italic*, line breaks. */
@@ -197,6 +233,22 @@ export default function Dojo() {
   const [errors, setErrors] = useState<Partial<Record<SectionKey, string>>>({});
   const [copied, setCopied] = useState<SectionKey | null>(null);
   const saveTimer = useRef<number | null>(null);
+  const session = useStore((s) => s.session);
+  const brief = useStore((s) => s.brief);
+
+  // Pre-populate topic from brief when arriving via the Start form.
+  useEffect(() => {
+    if (brief?.subject && !state.topic.trim()) {
+      setState((s) => ({ ...s, topic: brief.subject }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load session on mount so quota is visible immediately.
+  useEffect(() => {
+    const token = getOrCreateToken();
+    api.initSession(token).then((s) => store.setSession(s));
+  }, []);
 
   // Persist (debounced) so a student never loses their questions/drafts.
   useEffect(() => {
@@ -226,6 +278,7 @@ export default function Dojo() {
     if (!rqFilled || loading[key]) return;
     setLoading((l) => ({ ...l, [key]: true }));
     setErrors((e) => ({ ...e, [key]: "" }));
+    const token = getOrCreateToken();
     try {
       const result = await api.generateDojoSection({
         section: key,
@@ -234,15 +287,23 @@ export default function Dojo() {
         topic: state.topic.trim(),
         research_questions: state.researchQuestions.trim(),
         notes: (state.notes[key] ?? "").trim(),
+        pro: state.pro,
+        session_token: USING_MOCK ? null : token,
       });
       setState((s) => ({ ...s, results: { ...s.results, [key]: result } }));
+      // Refresh quota display after each generation.
+      api.getSession(token).then((s) => store.setSession(s));
     } catch (e) {
-      setErrors((er) => ({
-        ...er,
-        [key]: `Couldn't generate this section: ${
-          e instanceof Error ? e.message : "unknown error"
-        }`,
-      }));
+      if ((e as { status?: number })?.status === 402) {
+        setErrors((er) => ({ ...er, [key]: "__quota__" }));
+      } else {
+        setErrors((er) => ({
+          ...er,
+          [key]: `Couldn't generate this section: ${
+            e instanceof Error ? e.message : "unknown error"
+          }`,
+        }));
+      }
     } finally {
       setLoading((l) => ({ ...l, [key]: false }));
     }
@@ -268,14 +329,27 @@ export default function Dojo() {
           <GraduationCap className="h-4 w-4" aria-hidden />
           The Dojo · a written-up sample thesis
         </p>
-        <h1 className="mt-1 font-display text-2xl font-semibold sm:text-3xl">
-          Your thesis, written up <span className="text-gradient">one chapter at a time</span>
-        </h1>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-display text-2xl font-semibold sm:text-3xl">
+            Your thesis, written up <span className="text-gradient">one chapter at a time</span>
+          </h1>
+          {!USING_MOCK && session && (
+            <QuotaBadge
+              quota={session.dojo_quota}
+              credits={session.credits}
+            />
+          )}
+        </div>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          Start with your research questions. Sensei then writes up a sample of
-          each chapter — Title, Introduction, Literature Review, Methodology,
-          Results and Discussion — directly answering those questions and grounded
-          in real papers from the ThesisSifu corpus, in English or Bahasa Melayu.
+          Start with your research questions. Sensei then writes up{" "}
+          {state.pro ? (
+            <span className="font-medium text-amber-500">a full chapter draft</span>
+          ) : (
+            "a sample of each chapter"
+          )}{" "}
+          — Title, Introduction, Literature Review, Methodology, Results and
+          Discussion — directly answering those questions and grounded in real
+          papers from the ThesisSifu corpus, in English or Bahasa Melayu.
         </p>
       </div>
 
@@ -332,6 +406,36 @@ export default function Dojo() {
               })}
             </div>
           </div>
+        </div>
+
+        {/* Pro toggle */}
+        <div className="col-span-full flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Pro — Full Chapter Draft
+              <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-600">
+                3× longer
+              </span>
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              Generates a complete chapter-length draft instead of a sample preview.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={state.pro}
+            onClick={() => patch({ pro: !state.pro })}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+              state.pro ? "bg-amber-500" : "bg-border"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                state.pro ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
         </div>
 
         <div className="mt-4">
@@ -413,7 +517,11 @@ export default function Dojo() {
                   ) : (
                     <Sparkles className="h-4 w-4" aria-hidden />
                   )}
-                  {isLoading ? "Drafting…" : result ? "Regenerate" : "Generate"}
+                  {isLoading
+                    ? "Drafting…"
+                    : result
+                    ? state.pro ? "Re-draft (Pro)" : "Regenerate"
+                    : state.pro ? "Draft Full Chapter" : "Generate"}
                 </button>
               </div>
 
@@ -427,11 +535,24 @@ export default function Dojo() {
                 className="mt-3 w-full resize-y rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
               />
 
-              {err && (
+              {err === "__quota__" ? (
+                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    No Dojo quota remaining
+                  </p>
+                  <p className="mt-1 text-sm text-muted">
+                    Contribute to ideas in the{" "}
+                    <Link to="/community" className="font-medium text-primary underline">
+                      Community tab
+                    </Link>{" "}
+                    to earn 3 credits per accepted contribution. Each credit unlocks one more section.
+                  </p>
+                </div>
+              ) : err ? (
                 <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
                   {err}
                 </p>
-              )}
+              ) : null}
 
               {isLoading && !result && (
                 <div className="mt-4 grid min-h-[120px] place-items-center rounded-xl border border-dashed border-border">

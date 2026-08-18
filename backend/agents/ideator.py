@@ -29,15 +29,6 @@ _SYSTEM = (
 
 
 def _tier_guidance(brief: Brief) -> str:
-    if brief.tier == "highschool":
-        return (
-            "TIER: HIGH SCHOOL. Each idea's `statement` must be a GUIDING "
-            "QUESTION (something open and answerable, not a yes/no). "
-            "`why_it_matters` should connect to the student's world in plain, "
-            "encouraging language. `scope` should describe a project a "
-            "secondary student can realistically pull off. Keep vocabulary "
-            "concrete."
-        )
     return (
         "TIER: UNIVERSITY. Each idea's `statement` must be a THESIS STATEMENT "
         "(an arguable claim). `why_it_matters` should articulate the RESEARCH "

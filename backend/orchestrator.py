@@ -127,11 +127,7 @@ def _refine_live(req: RefineRequest) -> IdeaCandidate:
 
     system = ideator_agent._SYSTEM  # reuse the Ideator persona
     tier = req.brief.tier
-    tier_line = (
-        "TIER: HIGH SCHOOL — statement is a guiding question, plain language."
-        if tier == "highschool"
-        else "TIER: UNIVERSITY — statement is a thesis with a research gap."
-    )
+    tier_line = "TIER: UNIVERSITY — statement is a thesis with a research gap."
     user = (
         f"Refine this ONE idea according to the student's nudge, keeping it a "
         f"defensible starting point (not a finished answer).\n\n"

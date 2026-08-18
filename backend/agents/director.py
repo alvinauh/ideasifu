@@ -20,13 +20,6 @@ _SYSTEM = (
 
 
 def _tier_guidance(brief: Brief) -> str:
-    if brief.tier == "highschool":
-        return (
-            "TIER: HIGH SCHOOL. Target 45-60 seconds total, 5-7 scenes. "
-            "Story-led and plain-language: open with a relatable hook, walk "
-            "through the guiding question warmly, end by inviting the student "
-            "to go investigate. Encouraging tone."
-        )
     return (
         "TIER: UNIVERSITY. Target 60-90 seconds total, 5-7 scenes. Structured "
         "and scholarly: state the thesis, frame the gap, sketch the argument "
@@ -37,7 +30,7 @@ def _tier_guidance(brief: Brief) -> str:
 
 def film(brief: Brief, idea: IdeaCandidate) -> VideoSummary:
     """Write a short narrated video summary for the chosen idea."""
-    lo, hi = (45, 60) if brief.tier == "highschool" else (60, 90)
+    lo, hi = (60, 90)
     user = (
         f"Film a short summary of this chosen idea.\n\n"
         f"Title: {idea.title}\n"

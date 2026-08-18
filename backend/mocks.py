@@ -25,29 +25,17 @@ from schemas import (
 )
 
 
-def _hs(brief: Brief) -> bool:
-    return brief.tier == "highschool"
-
-
 # --------------------------------------------------------------------------- #
 # Scout
 # --------------------------------------------------------------------------- #
 def mock_scout(brief: Brief) -> ScoutReport:
     subj = brief.subject.strip() or "your topic"
-    if _hs(brief):
-        context = (
-            f"{subj.capitalize()} is showing up in the news a lot right now, and "
-            f"people don't all agree about what to do. There are real examples "
-            f"you can point to, and it connects to everyday life — which makes it "
-            f"a great topic to get curious about."
-        )
-    else:
-        context = (
-            f"Scholarship on {subj} has expanded rapidly in the last few years, "
-            f"but the literature remains contested on both mechanisms and "
-            f"policy implications. Recent empirical work has opened gaps that a "
-            f"focused student project could meaningfully engage."
-        )
+    context = (
+        f"Scholarship on {subj} has expanded rapidly in the last few years, "
+        f"but the literature remains contested on both mechanisms and "
+        f"policy implications. Recent empirical work has opened gaps that a "
+        f"focused student project could meaningfully engage."
+    )
     findings = [
         ScoutFinding(
             title=f"Recent developments in {subj}",
@@ -96,74 +84,40 @@ def mock_candidates(brief: Brief) -> list[IdeaCandidate]:
     interest = brief.interests.strip()
     angle_tag = f" through the lens of {interest}" if interest else ""
 
-    if _hs(brief):
-        specs = [
-            (
-                f"What everyday choices really change {subj}?",
-                f"Why does {subj} matter for people my age, and what can we "
-                f"actually do about it?",
-                "everyday-life angle",
-                "A focused look at daily choices and local examples.",
-                "approachable",
-            ),
-            (
-                f"Who is responsible for fixing {subj}?",
-                f"When it comes to {subj}, should individuals or governments do "
-                f"the heavy lifting — and why?",
-                "responsibility angle",
-                "Compare two viewpoints and weigh the evidence for each.",
-                "moderate",
-            ),
-            (
-                f"Is what we're doing about {subj} actually working?",
-                f"Are the current solutions to {subj} genuinely helping, or just "
-                f"making us feel better?",
-                "effectiveness angle",
-                "Test a popular 'solution' against real outcomes.",
-                "ambitious",
-            ),
-        ]
-    else:
-        specs = [
-            (
-                f"Rethinking the drivers of {subj}",
-                f"Contrary to the dominant framing, {subj} is best explained by "
-                f"structural rather than individual factors.",
-                "structural-causation angle",
-                "Bounded literature synthesis; excludes primary data collection.",
-                "approachable",
-            ),
-            (
-                f"The accountability gap in {subj}",
-                f"Current governance of {subj} systematically misallocates "
-                f"responsibility, producing predictable policy failure.",
-                "governance / accountability angle",
-                "Comparative case analysis of two policy regimes.",
-                "moderate",
-            ),
-            (
-                f"Measuring what interventions in {subj} actually achieve",
-                f"Prevailing interventions in {subj} are evaluated on proxies "
-                f"that overstate their real-world impact.",
-                "measurement / evaluation angle",
-                "Critique of evaluation methodology using secondary data.",
-                "ambitious",
-            ),
-        ]
+    specs = [
+        (
+            f"Rethinking the drivers of {subj}",
+            f"Contrary to the dominant framing, {subj} is best explained by "
+            f"structural rather than individual factors.",
+            "structural-causation angle",
+            "Bounded literature synthesis; excludes primary data collection.",
+            "approachable",
+        ),
+        (
+            f"The accountability gap in {subj}",
+            f"Current governance of {subj} systematically misallocates "
+            f"responsibility, producing predictable policy failure.",
+            "governance / accountability angle",
+            "Comparative case analysis of two policy regimes.",
+            "moderate",
+        ),
+        (
+            f"Measuring what interventions in {subj} actually achieve",
+            f"Prevailing interventions in {subj} are evaluated on proxies "
+            f"that overstate their real-world impact.",
+            "measurement / evaluation angle",
+            "Critique of evaluation methodology using secondary data.",
+            "ambitious",
+        ),
+    ]
 
     candidates: list[IdeaCandidate] = []
     for i, (title, statement, angle, scope, difficulty) in enumerate(specs, start=1):
-        if _hs(brief):
-            why = (
-                f"This connects {subj} to real life{angle_tag} and gives you a "
-                f"clear question to explore in your {brief.assignment_type}."
-            )
-        else:
-            why = (
-                f"This addresses a live gap in how {subj} is understood"
-                f"{angle_tag}, and is tractable at the {brief.level or 'your'} "
-                f"level as a {brief.assignment_type}."
-            )
+        why = (
+            f"This addresses a live gap in how {subj} is understood"
+            f"{angle_tag}, and is tractable at the {brief.level or 'your'} "
+            f"level as a {brief.assignment_type}."
+        )
         candidates.append(
             IdeaCandidate(
                 id=f"idea-{i}",
@@ -183,19 +137,13 @@ def mock_candidates(brief: Brief) -> list[IdeaCandidate]:
 # --------------------------------------------------------------------------- #
 def mock_mindmap(brief: Brief, idea: IdeaCandidate) -> MindMap:
     subj = brief.subject.strip() or "the topic"
-    root_type = "question" if _hs(brief) else "thesis"
-
     nodes = [
         MindMapNode(
             id="n1",
             label=idea.title,
-            type=root_type,
+            type="thesis",
             parent=None,
-            prompt=(
-                "What would you need to be true for this to hold up?"
-                if not _hs(brief)
-                else "Where would you start exploring this question?"
-            ),
+            prompt="What would you need to be true for this to hold up?",
         ),
         MindMapNode(
             id="n2",
@@ -265,65 +213,6 @@ def mock_mindmap(brief: Brief, idea: IdeaCandidate) -> MindMap:
 # --------------------------------------------------------------------------- #
 def mock_sources(brief: Brief, idea: IdeaCandidate) -> list[Source]:
     subj = brief.subject.strip() or "the topic"
-    if _hs(brief):
-        return [
-            Source(
-                id="s1",
-                kind="article",
-                title=f"A clear introduction to {subj}",
-                authors="J. Rivera",
-                year="2024",
-                citation=(
-                    f"Rivera, J. (2024). A clear introduction to {subj}. "
-                    f"Explainer Magazine. Find it online at explainermag.example."
-                ),
-                url="https://example.org/intro",
-                credibility="high",
-                why="A trustworthy, readable overview to get your bearings.",
-            ),
-            Source(
-                id="s2",
-                kind="book",
-                title=f"Understanding {subj}: The Big Picture",
-                authors="M. Okafor",
-                year="2022",
-                citation=(
-                    f"Okafor, M. (2022). Understanding {subj}: The Big Picture. "
-                    f"Bright Books. Check your library."
-                ),
-                url=None,
-                credibility="high",
-                why="A whole book you can dip into for background and examples.",
-            ),
-            Source(
-                id="s3",
-                kind="web",
-                title=f"Facts and figures about {subj}",
-                authors="Data Portal",
-                year="2025",
-                citation=(
-                    f"Data Portal (2025). Facts and figures about {subj}. "
-                    f"Retrieved from dataportal.example."
-                ),
-                url="https://example.org/facts",
-                credibility="medium",
-                why="Real numbers you can use to back up (or test) a claim.",
-            ),
-            Source(
-                id="s4",
-                kind="article",
-                title=f"A different opinion on {subj}",
-                authors="Anonymous blogger",
-                year="2025",
-                citation=(
-                    f"Anonymous (2025). A different opinion on {subj}. "
-                    f"Personal blog."
-                ),
-                url="https://example.org/opinion",
-                credibility="unverified",
-                why="Shows a counter-view — but check who's behind it first.",
-            ),
-        ]
     return [
         Source(
             id="s1",
@@ -390,88 +279,46 @@ def mock_sources(brief: Brief, idea: IdeaCandidate) -> list[Source]:
 # --------------------------------------------------------------------------- #
 def mock_video(brief: Brief, idea: IdeaCandidate) -> VideoSummary:
     subj = brief.subject.strip() or "the topic"
-    if _hs(brief):
-        scenes = [
-            VideoScene(
-                n=1,
-                visual=f"A bold title card: '{idea.title}'",
-                narration=f"Ever wondered how {subj} really affects your life?",
-                seconds=8,
-            ),
-            VideoScene(
-                n=2,
-                visual="A relatable everyday scene",
-                narration=f"Here's the question we're chasing: {idea.statement}",
-                seconds=9,
-            ),
-            VideoScene(
-                n=3,
-                visual="Simple animated chart appearing",
-                narration="First, look at what the evidence actually shows.",
-                seconds=9,
-            ),
-            VideoScene(
-                n=4,
-                visual="Two speech bubbles facing off",
-                narration="But not everyone agrees — and that's the interesting part.",
-                seconds=9,
-            ),
-            VideoScene(
-                n=5,
-                visual="A checklist of next steps",
-                narration="Your job? Weigh the sides and decide what you think.",
-                seconds=8,
-            ),
-            VideoScene(
-                n=6,
-                visual="Call-to-action card with a question mark",
-                narration="So — where will your investigation start?",
-                seconds=7,
-            ),
-        ]
-        title = f"{idea.title} — a starting point"
-        hook = f"A 50-second spark for exploring {subj}."
-    else:
-        scenes = [
-            VideoScene(
-                n=1,
-                visual="Clean title slide with the thesis",
-                narration=f"Thesis: {idea.statement}",
-                seconds=12,
-            ),
-            VideoScene(
-                n=2,
-                visual="Diagram of the research gap",
-                narration=f"Here is the gap in how we currently understand {subj}.",
-                seconds=13,
-            ),
-            VideoScene(
-                n=3,
-                visual="Evidence sources stacking up",
-                narration="The argument rests on these lines of evidence.",
-                seconds=13,
-            ),
-            VideoScene(
-                n=4,
-                visual="A prominent counter-argument slide",
-                narration="A serious objection must be confronted, not ignored.",
-                seconds=13,
-            ),
-            VideoScene(
-                n=5,
-                visual="Methodology flow",
-                narration="Rigorous inquiry would test the claim like this.",
-                seconds=12,
-            ),
-            VideoScene(
-                n=6,
-                visual="Closing slide with open questions",
-                narration="Which questions remain, and how would you answer them?",
-                seconds=12,
-            ),
-        ]
-        title = f"{idea.title} — a research brief"
-        hook = f"A 75-second scholarly framing of {subj}."
+    scenes = [
+        VideoScene(
+            n=1,
+            visual="Clean title slide with the thesis",
+            narration=f"Thesis: {idea.statement}",
+            seconds=12,
+        ),
+        VideoScene(
+            n=2,
+            visual="Diagram of the research gap",
+            narration=f"Here is the gap in how we currently understand {subj}.",
+            seconds=13,
+        ),
+        VideoScene(
+            n=3,
+            visual="Evidence sources stacking up",
+            narration="The argument rests on these lines of evidence.",
+            seconds=13,
+        ),
+        VideoScene(
+            n=4,
+            visual="A prominent counter-argument slide",
+            narration="A serious objection must be confronted, not ignored.",
+            seconds=13,
+        ),
+        VideoScene(
+            n=5,
+            visual="Methodology flow",
+            narration="Rigorous inquiry would test the claim like this.",
+            seconds=12,
+        ),
+        VideoScene(
+            n=6,
+            visual="Closing slide with open questions",
+            narration="Which questions remain, and how would you answer them?",
+            seconds=12,
+        ),
+    ]
+    title = f"{idea.title} — a research brief"
+    hook = f"A 75-second scholarly framing of {subj}."
 
     return VideoSummary(
         title=title,

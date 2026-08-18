@@ -12,10 +12,12 @@ Provider strategy
   search via OpenRouter's Exa-backed plugin. Groq's chat API can't search, so it
   is only a last-ditch no-web fallback. `:online` is billed to the OpenRouter
   account, so it is used ONLY for the two agents that genuinely need fresh sources.
+* Pro tier (Dojo): DeepSeek V3 direct API (primary, no watermarking) →
+  Gemini 2.5 Flash via OpenRouter (fallback) → free chain as last resort.
 
-If neither GROQ_API_KEY nor OPENROUTER_API_KEY is set (or the SDK isn't
-installed), `is_live()` returns False and the orchestrator serves deterministic
-mock data instead — so the whole app runs end-to-end with zero credentials.
+If no API keys are set (or the SDK isn't installed), `is_live()` returns False
+and the orchestrator serves deterministic mock data instead — so the whole app
+runs end-to-end with zero credentials.
 """
 from __future__ import annotations
 
@@ -42,6 +44,12 @@ OPENROUTER_MODEL = os.environ.get(
 # `:online` gives the model OpenRouter's web-search plugin (used by Scout/Librarian).
 OPENROUTER_ONLINE_MODEL = os.environ.get(
     "IDEASIFU_OPENROUTER_ONLINE_MODEL", "meta-llama/llama-3.3-70b-instruct:online"
+)
+# Pro tier: DeepSeek V3 primary (no watermarking, ~$0.02/full generation),
+# Gemini 2.5 Flash via OpenRouter as fallback if DeepSeek fails.
+DEEPSEEK_PRO_MODEL = os.environ.get("IDEASIFU_PRO_MODEL", "deepseek-chat")
+OPENROUTER_PRO_FALLBACK_MODEL = os.environ.get(
+    "IDEASIFU_PRO_FALLBACK_MODEL", "google/gemini-2.5-flash"
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -75,22 +83,39 @@ def _openrouter_client():
     )
 
 
+def _deepseek_client():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if OpenAI is None or not key:
+        return None
+    return OpenAI(
+        base_url="https://api.deepseek.com/v1",
+        api_key=key,
+        timeout=120.0,
+    )
+
+
 _groq = _groq_client()
 _openrouter = _openrouter_client()
+_deepseek = _deepseek_client()
 
 
 def is_live() -> bool:
-    return _groq is not None or _openrouter is not None
+    return _groq is not None or _openrouter is not None or _deepseek is not None
 
 
-def _providers(web: bool):
+def _providers(web: bool, pro: bool = False):
     """Ordered (client, model, label) chain to try for this call.
 
-    Web agents lead with OpenRouter `:online` (real web search); non-web agents
-    lead with fast Groq. Each falls back to the other provider so a single
-    provider outage doesn't drop us straight to mock data.
+    Pro requests lead with the paid model (OPENROUTER_PRO_MODEL) and fall
+    through to the free chain if that fails. Web agents lead with OpenRouter
+    `:online`; non-web agents lead with fast Groq.
     """
     chain = []
+    if pro:
+        if _deepseek is not None:
+            chain.append((_deepseek, DEEPSEEK_PRO_MODEL, "deepseek:pro"))
+        if _openrouter is not None:
+            chain.append((_openrouter, OPENROUTER_PRO_FALLBACK_MODEL, "openrouter:pro-fallback"))
     if web:
         if _openrouter is not None:
             chain.append((_openrouter, OPENROUTER_ONLINE_MODEL, "openrouter:online"))
@@ -186,6 +211,7 @@ def generate(
     model_cls: Type[T],
     *,
     web: bool = False,
+    pro: bool = False,
     max_tokens: int = 8000,
 ) -> T:
     """Ask an LLM for a JSON object validated against `model_cls`.
@@ -194,7 +220,7 @@ def generate(
     schema-valid JSON wins. Raises LLMUnavailable if none succeed (the
     orchestrator then falls back to mock data).
     """
-    chain = _providers(web)
+    chain = _providers(web, pro)
     if not chain:
         raise LLMUnavailable("no GROQ_API_KEY or OPENROUTER_API_KEY configured")
 

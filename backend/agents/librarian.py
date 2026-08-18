@@ -32,14 +32,6 @@ _SYSTEM = (
 
 
 def _tier_guidance(brief: Brief) -> str:
-    if brief.tier == "highschool":
-        return (
-            "TIER: HIGH SCHOOL. Citation format is PLAIN and explained: write "
-            "`citation` as a simple, readable reference (Author, Title, Year, "
-            "where to find it) and use `why` to explain in plain words what the "
-            "student would get from it. Favor accessible sources: reputable "
-            "articles, explainers, and 1-2 approachable books."
-        )
     return (
         "TIER: UNIVERSITY. Citation format is APA. Write `citation` as a "
         "properly formatted APA reference (include DOI/URL where available). "

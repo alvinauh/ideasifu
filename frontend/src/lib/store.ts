@@ -8,6 +8,7 @@ import type {
   IdeaCandidate,
   IdeaResult,
   ScoutReport,
+  SessionInfo,
 } from "@/lib/types";
 
 export interface SavedIdea {
@@ -24,9 +25,40 @@ interface StoreState {
   candidates: IdeaCandidate[];
   current: IdeaResult | null;
   library: SavedIdea[];
+  session: SessionInfo | null;
+  sharedIdeaIds: Set<string>;
 }
 
 const LIB_KEY = "ideasifu.library";
+const SESSION_KEY = "ideasifu.session_token";
+
+function generateToken(): string {
+  // RFC-4122-ish UUID v4 without depending on crypto.randomUUID (broader compat)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export function getOrCreateToken(): string {
+  let token = localStorage.getItem(SESSION_KEY);
+  if (!token) {
+    token = generateToken();
+    localStorage.setItem(SESSION_KEY, token);
+  }
+  return token;
+}
+
+function loadSharedIdeaIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem("ideasifu.shared_ideas");
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
 
 function loadLibrary(): SavedIdea[] {
   try {
@@ -45,6 +77,8 @@ let state: StoreState = {
   candidates: [],
   current: null,
   library: loadLibrary(),
+  session: null,
+  sharedIdeaIds: loadSharedIdeaIds(),
 };
 
 const listeners = new Set<() => void>();
@@ -102,6 +136,25 @@ export const store = {
     const entry = state.library.find((e) => e.key === key);
     if (entry) set({ brief: entry.brief, current: entry.result });
     return entry;
+  },
+
+  setSession(session: SessionInfo) {
+    set({ session });
+  },
+
+  markIdeaShared(ideaId: string) {
+    const next = new Set(state.sharedIdeaIds);
+    next.add(ideaId);
+    try {
+      localStorage.setItem("ideasifu.shared_ideas", JSON.stringify([...next]));
+    } catch {
+      // non-fatal
+    }
+    set({ sharedIdeaIds: next });
+  },
+
+  isIdeaShared(ideaId: string): boolean {
+    return state.sharedIdeaIds.has(ideaId);
   },
 };
 

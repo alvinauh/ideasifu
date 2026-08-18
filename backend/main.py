@@ -26,14 +26,18 @@ Run:  uvicorn main:app --host 0.0.0.0 --port 8000
 from __future__ import annotations
 
 import os
+import uuid
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
     Brief,
     BuildRequest,
+    CommunityFeedResponse,
+    ContributionRequest,
+    ContributionResult,
     CorpusSearchRequest,
     CorpusSearchResponse,
     DojoCorpusExample,
@@ -44,9 +48,17 @@ from schemas import (
     IdeaResult,
     MoreIdeasRequest,
     RefineRequest,
+    SessionInfo,
+    SessionInitRequest,
+    ShareIdeaRequest,
+    SharedIdea,
+    SharedIdeaDetail,
+    ContributionItem,
 )
 from agents.llm import is_live
+from agents.assessor import assess
 import orchestrator
+import db
 
 # ThesisSifu's additive /search endpoint (embeds with the bge-m3 model it already
 # has loaded, then vector-searches its Qdrant corpus). Reached over the shared
@@ -61,6 +73,10 @@ app = FastAPI(
     description="A multi-agent thesis/assignment idea generator for students.",
     version="1.0.0",
 )
+
+@app.on_event("startup")
+def startup():
+    db.init_db()
 
 # Permissive CORS (mirrors the ThesisSifu sibling app).
 app.add_middleware(
@@ -288,13 +304,25 @@ def _dojo_corpus_query(req: DojoGenerateRequest) -> str:
 async def dojo_generate(req: DojoGenerateRequest) -> DojoSectionResult:
     """Write one capped, corpus-grounded sample thesis section (the Dojo).
 
-    Pulls real papers from ThesisSifu's corpus to ground the writeup, then hands
-    them to Sensei (or the deterministic mock) to draft the section. The research
-    questions are required; every other section is generatable on demand.
+    When a session_token is provided, checks and decrements the session's Dojo
+    quota (free allowance + earned credits). Students earn more quota by
+    contributing substantively to the community. Without a token, runs freely
+    (backwards-compatible / demo mode).
     """
     if not req.research_questions.strip():
-        # Should be caught client-side, but guard the contract here too.
         req.research_questions = ""
+
+    if req.session_token:
+        session = db.get_or_create_session(req.session_token)
+        allowed = db.consume_dojo_quota(req.session_token)
+        if not allowed:
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    "No Dojo quota remaining. "
+                    "Contribute to ideas in the Community tab to earn more credits."
+                ),
+            )
 
     corpus: list[DojoCorpusExample] = []
     hits = await _corpus_search(_dojo_corpus_query(req), top_k=6)
@@ -305,11 +333,124 @@ async def dojo_generate(req: DojoGenerateRequest) -> DojoSectionResult:
             )
             for h in hits.results
         ]
-        # Enrich with real reference metadata (authors/year/venue/DOI) so the
-        # grounding panel shows full citations, not bare titles.
         await _enrich_corpus(corpus)
 
     return orchestrator.run_dojo(req, corpus)
+
+
+# ---------------------------------------------------------------------------
+# Community / social endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/session/init", response_model=SessionInfo)
+def session_init(req: SessionInitRequest) -> SessionInfo:
+    """Create or retrieve an anonymous session by its UUID token."""
+    data = db.get_or_create_session(req.token)
+    return SessionInfo(
+        token=data["token"],
+        credits=data["credits"],
+        dojo_quota=data["dojo_quota"],
+    )
+
+
+@app.get("/session/{token}", response_model=SessionInfo)
+def session_get(token: str) -> SessionInfo:
+    data = db.get_session(token)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return SessionInfo(
+        token=data["token"],
+        credits=data["credits"],
+        dojo_quota=data["dojo_quota"],
+    )
+
+
+@app.post("/community/share", response_model=SharedIdea)
+def community_share(req: ShareIdeaRequest) -> SharedIdea:
+    """Share an idea to the community pool (idempotent — safe to call twice)."""
+    db.get_or_create_session(req.session_token)
+    data = db.share_idea(
+        idea_id=req.idea.id,
+        session_token=req.session_token,
+        title=req.idea.title,
+        statement=req.idea.statement,
+        angle=req.idea.angle,
+    )
+    return SharedIdea(**data)
+
+
+@app.get("/community/feed", response_model=CommunityFeedResponse)
+def community_feed(limit: int = 20, offset: int = 0) -> CommunityFeedResponse:
+    """Paginated list of community-shared ideas (newest first)."""
+    ideas = db.get_shared_ideas(limit=limit, offset=offset)
+    total = db.count_shared_ideas()
+    return CommunityFeedResponse(
+        ideas=[SharedIdea(**i) for i in ideas],
+        total=total,
+    )
+
+
+@app.get("/community/idea/{idea_id}", response_model=SharedIdeaDetail)
+def community_idea_detail(idea_id: str) -> SharedIdeaDetail:
+    """Retrieve one shared idea with its (anonymized) contributions."""
+    idea = db.get_shared_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found.")
+    contribs = db.get_contributions_for_idea(idea_id)
+    return SharedIdeaDetail(
+        **idea,
+        contributions=[ContributionItem(**c) for c in contribs],
+    )
+
+
+@app.post("/community/contribute", response_model=ContributionResult)
+def community_contribute(req: ContributionRequest) -> ContributionResult:
+    """Submit a structured contribution to a shared idea.
+
+    The contribution is assessed by the Assessor agent for quality. Substantive
+    contributions (not empty agreement or filler) earn the contributor 3 credits,
+    which can be spent on Dojo section generations.
+    """
+    idea = db.get_shared_idea(req.idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found.")
+
+    db.get_or_create_session(req.contributor_token)
+
+    verdict = assess(
+        idea_title=idea["title"],
+        idea_statement=idea["statement"],
+        contribution_type=req.type,
+        contribution_text=req.text,
+    )
+
+    credits_awarded = db.CONTRIBUTION_CREDITS if verdict.quality_ok else 0
+    new_credits = 0
+    if verdict.quality_ok:
+        new_credits = db.award_credits(req.contributor_token, credits_awarded)
+    else:
+        session = db.get_session(req.contributor_token)
+        new_credits = session["credits"] if session else 0
+
+    contrib_id = str(uuid.uuid4())
+    db.add_contribution(
+        contrib_id=contrib_id,
+        idea_id=req.idea_id,
+        contributor_token=req.contributor_token,
+        type_=req.type,
+        text=req.text,
+        quality_ok=verdict.quality_ok,
+        quality_reason=verdict.reason,
+        credits_awarded=credits_awarded,
+    )
+
+    return ContributionResult(
+        id=contrib_id,
+        credits_awarded=credits_awarded,
+        quality_ok=verdict.quality_ok,
+        quality_reason=verdict.reason,
+        new_credits=new_credits,
+    )
 
 
 if __name__ == "__main__":

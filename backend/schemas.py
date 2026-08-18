@@ -8,14 +8,14 @@ from __future__ import annotations
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-Tier = Literal["highschool", "university"]
+Tier = Literal["university"]
 AssignmentType = Literal["essay", "research_proposal", "project", "presentation"]
 
 
 class Brief(BaseModel):
     """The student's short brief — the only required input."""
     subject: str = Field(..., description="Subject or topic, e.g. 'climate change in Southeast Asia'")
-    tier: Tier = "highschool"
+    tier: Tier = "university"
     level: str = Field("", description="Exact year/level, e.g. 'Form 5' or 'Year 2 undergraduate'")
     interests: str = Field("", description="Optional angle / interests")
     assignment_type: AssignmentType = "essay"
@@ -171,6 +171,10 @@ class DojoGenerateRequest(BaseModel):
     notes: str = Field(
         "", description="Optional: what the student briefly wants this section to cover"
     )
+    pro: bool = Field(False, description="Pro tier: 3× word cap, paid model")
+    session_token: Optional[str] = Field(
+        None, description="Anonymous session token; if provided, Dojo quota is checked and decremented"
+    )
 
 
 class DojoCorpusExample(BaseModel):
@@ -195,3 +199,71 @@ class DojoSectionResult(BaseModel):
     )
     language: DojoLang = "en"
     word_count: int = 0
+
+
+# --- Community / social feature ---
+
+ContributionType = Literal["challenge", "extend", "source"]
+
+
+class SessionInfo(BaseModel):
+    token: str
+    credits: int = 0
+    dojo_quota: int = 3
+
+
+class SessionInitRequest(BaseModel):
+    token: str
+
+
+class ShareIdeaRequest(BaseModel):
+    session_token: str
+    idea: IdeaCandidate
+
+
+class SharedIdea(BaseModel):
+    id: str
+    title: str
+    statement: str
+    angle: str
+    shared_at: str
+    contribution_count: int = 0
+
+
+class ContributionItem(BaseModel):
+    id: str
+    type: ContributionType
+    text: str
+    quality_ok: bool
+    credits_awarded: int
+    created_at: str
+
+
+class SharedIdeaDetail(BaseModel):
+    id: str
+    title: str
+    statement: str
+    angle: str
+    shared_at: str
+    contribution_count: int = 0
+    contributions: list[ContributionItem] = []
+
+
+class ContributionRequest(BaseModel):
+    idea_id: str
+    contributor_token: str
+    type: ContributionType
+    text: str
+
+
+class ContributionResult(BaseModel):
+    id: str
+    credits_awarded: int
+    quality_ok: bool
+    quality_reason: str
+    new_credits: int
+
+
+class CommunityFeedResponse(BaseModel):
+    ideas: list[SharedIdea]
+    total: int

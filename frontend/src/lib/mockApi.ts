@@ -4,6 +4,9 @@
 
 import type {
   Brief,
+  CommunityFeedResponse,
+  ContributionRequest,
+  ContributionResult,
   CorpusSearchResponse,
   DojoCorpusExample,
   DojoGenerateRequest,
@@ -14,6 +17,7 @@ import type {
   IdeaResult,
   MindMap,
   ScoutReport,
+  SharedIdeaDetail,
   Source,
   VideoSummary,
 } from "@/lib/types";
@@ -554,4 +558,79 @@ export async function searchCorpus(
     score: Number((0.74 - i * 0.03).toFixed(3)),
   }));
   return { status: "ok", count: results.length, results, message: null };
+}
+
+// --- Community mock data ---
+
+const MOCK_COMMUNITY_IDEAS = [
+  {
+    id: "mock-idea-community-1",
+    title: "AI Bias in University Admissions Systems",
+    statement: "Algorithmic admissions tools amplify socioeconomic inequity because they are trained on historical acceptance data that reflects human bias.",
+    angle: "Ethical / sociological critique",
+    shared_at: "2025-08-15T09:00:00",
+    contribution_count: 3,
+  },
+  {
+    id: "mock-idea-community-2",
+    title: "Microplastics and Freshwater Biodiversity Loss",
+    statement: "Microplastic contamination in river systems is a leading but underregulated driver of invertebrate biodiversity collapse.",
+    angle: "Environmental science / policy gap",
+    shared_at: "2025-08-14T14:30:00",
+    contribution_count: 1,
+  },
+  {
+    id: "mock-idea-community-3",
+    title: "Digital Nomadism and Urban Housing Affordability",
+    statement: "The rise of location-independent remote work intensifies housing price pressure in mid-sized cities by creating demand without increasing local supply.",
+    angle: "Urban economics / social impact",
+    shared_at: "2025-08-13T11:00:00",
+    contribution_count: 5,
+  },
+];
+
+export async function getCommunityFeed(): Promise<CommunityFeedResponse> {
+  await delay(400);
+  return { ideas: MOCK_COMMUNITY_IDEAS, total: MOCK_COMMUNITY_IDEAS.length };
+}
+
+export async function getIdeaDetail(ideaId: string): Promise<SharedIdeaDetail> {
+  await delay(300);
+  const idea = MOCK_COMMUNITY_IDEAS.find((i) => i.id === ideaId) ?? MOCK_COMMUNITY_IDEAS[0];
+  return {
+    ...idea,
+    contributions: [
+      {
+        id: "mock-contrib-1",
+        type: "challenge",
+        text: "The framing assumes all bias originates in training data, but the choice of which features to include in the model is itself a human decision that deserves more scrutiny — this is often where proxy discrimination enters.",
+        quality_ok: true,
+        credits_awarded: 3,
+        created_at: "2025-08-15T10:00:00",
+      },
+      {
+        id: "mock-contrib-2",
+        type: "source",
+        text: "Obermeyer et al. (2019) in Science documented a commercial algorithm used in US healthcare that systematically underestimated Black patients' needs — a direct empirical parallel that would strengthen this argument.",
+        quality_ok: true,
+        credits_awarded: 3,
+        created_at: "2025-08-15T12:00:00",
+      },
+    ],
+  };
+}
+
+export async function contribute(req: ContributionRequest): Promise<ContributionResult> {
+  await delay(1200);
+  const wordCount = req.text.trim().split(/\s+/).length;
+  const isSubstantive = wordCount >= 15 && !req.text.toLowerCase().startsWith("i agree");
+  return {
+    id: `mock-contrib-${Date.now()}`,
+    credits_awarded: isSubstantive ? 3 : 0,
+    quality_ok: isSubstantive,
+    quality_reason: isSubstantive
+      ? "Contribution accepted — well-reasoned and specific."
+      : "Your contribution needs more specifics. Try explaining the 'why' or naming a concrete example.",
+    new_credits: isSubstantive ? 9 : 6,
+  };
 }

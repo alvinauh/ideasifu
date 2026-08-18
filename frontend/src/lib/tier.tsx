@@ -1,8 +1,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
-  useState,
   type ReactNode,
 } from "react";
 import type { Tier } from "@/lib/types";
@@ -28,14 +26,6 @@ export interface TierCopy {
 }
 
 const COPY: Record<Tier, TierCopy> = {
-  highschool: {
-    statementLabel: "Guiding question",
-    framingQuestion: "What are you curious about?",
-    toneWord: "warm coach",
-    heroSub:
-      "Go from a blank page to a real idea you can defend — with a thinking map, sources to read, and a short video that explains it.",
-    counterLabel: "But wait...",
-  },
   university: {
     statementLabel: "Thesis statement",
     framingQuestion: "What gap are you addressing?",
@@ -47,21 +37,13 @@ const COPY: Record<Tier, TierCopy> = {
 };
 
 const TierContext = createContext<TierContextValue | null>(null);
-const STORAGE_KEY = "ideasifu.tier";
 
 export function TierProvider({ children }: { children: ReactNode }) {
-  const [tier, setTierState] = useState<Tier>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === "university" ? "university" : "highschool";
-  });
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, tier);
-  }, [tier]);
+  const tier: Tier = "university";
 
   const value: TierContextValue = {
     tier,
-    setTier: setTierState,
+    setTier: () => {},
     copy: COPY[tier],
   };
   return <TierContext.Provider value={value}>{children}</TierContext.Provider>;

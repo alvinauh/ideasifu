@@ -3,6 +3,9 @@
 
 import type {
   Brief,
+  CommunityFeedResponse,
+  ContributionRequest,
+  ContributionResult,
   CorpusSearchResponse,
   DojoGenerateRequest,
   DojoSectionResult,
@@ -10,6 +13,9 @@ import type {
   IdeaCandidate,
   IdeaResult,
   ScoutReport,
+  SessionInfo,
+  SharedIdea,
+  SharedIdeaDetail,
 } from "@/lib/types";
 import * as mock from "@/lib/mockApi";
 
@@ -23,8 +29,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${res.statusText}`);
+    const detail = await res.json().catch(() => ({}));
+    const msg = (detail as { detail?: string }).detail ?? res.statusText;
+    const err = new Error(msg) as Error & { status: number };
+    err.status = res.status;
+    throw err;
   }
+  return (await res.json()) as T;
+}
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) throw new Error(`API GET ${path} failed: ${res.status}`);
   return (await res.json()) as T;
 }
 
@@ -75,4 +91,53 @@ export function generateDojoSection(
 ): Promise<DojoSectionResult> {
   if (USING_MOCK) return mock.generateDojoSection(req);
   return post<DojoSectionResult>("/dojo/generate", req);
+}
+
+// --- Community / social endpoints ---
+
+export function initSession(token: string): Promise<SessionInfo> {
+  if (USING_MOCK) return Promise.resolve({ token, credits: 6, dojo_quota: 3 });
+  return post<SessionInfo>("/session/init", { token });
+}
+
+export function getSession(token: string): Promise<SessionInfo> {
+  if (USING_MOCK) return Promise.resolve({ token, credits: 6, dojo_quota: 3 });
+  return get<SessionInfo>(`/session/${token}`);
+}
+
+export function shareIdea(
+  sessionToken: string,
+  idea: IdeaCandidate,
+): Promise<SharedIdea> {
+  if (USING_MOCK) {
+    return Promise.resolve({
+      id: idea.id,
+      title: idea.title,
+      statement: idea.statement,
+      angle: idea.angle,
+      shared_at: new Date().toISOString(),
+      contribution_count: 0,
+    });
+  }
+  return post<SharedIdea>("/community/share", { session_token: sessionToken, idea });
+}
+
+export function getCommunityFeed(
+  limit = 20,
+  offset = 0,
+): Promise<CommunityFeedResponse> {
+  if (USING_MOCK) return mock.getCommunityFeed();
+  return get<CommunityFeedResponse>(
+    `/community/feed?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export function getIdeaDetail(ideaId: string): Promise<SharedIdeaDetail> {
+  if (USING_MOCK) return mock.getIdeaDetail(ideaId);
+  return get<SharedIdeaDetail>(`/community/idea/${ideaId}`);
+}
+
+export function contribute(req: ContributionRequest): Promise<ContributionResult> {
+  if (USING_MOCK) return mock.contribute(req);
+  return post<ContributionResult>("/community/contribute", req);
 }

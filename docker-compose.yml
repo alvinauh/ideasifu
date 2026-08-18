@@ -22,6 +22,10 @@ services:
       # ThesisSifu's /search, reachable on the shared network below. If the
       # thesissifu stack is absent, the Corpus tab degrades gracefully.
       THESISSIFU_SEARCH_URL: ${THESISSIFU_SEARCH_URL:-http://api:8000/search}
+      # SQLite DB path inside the container (persisted via named volume below).
+      IDEASIFU_DB_PATH: /data/ideasifu.db
+    volumes:
+      - ideasifu_data:/data
     ports:
       - "8005:8000"   # direct API access (/docs, /health)
     networks:
@@ -54,3 +58,8 @@ networks:
   thesissifu:
     name: thesissifu_project_default
     external: true
+
+volumes:
+  # Persists the community SQLite DB across container restarts and rebuilds.
+  ideasifu_data:
+    name: ideasifu_data

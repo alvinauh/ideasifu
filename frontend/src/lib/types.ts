@@ -1,6 +1,6 @@
 // TS mirror of backend/schemas.py. Keep in sync.
 
-export type Tier = "highschool" | "university";
+export type Tier = "university";
 export type AssignmentType =
   | "essay"
   | "research_proposal"
@@ -150,6 +150,8 @@ export interface DojoGenerateRequest {
   topic: string;
   research_questions: string;
   notes: string;
+  pro?: boolean;
+  session_token?: string | null;
 }
 
 export interface DojoCorpusExample {
@@ -170,4 +172,56 @@ export interface DojoSectionResult {
   corpus_examples: DojoCorpusExample[];
   language: DojoLang;
   word_count: number;
+}
+
+// --- Community / social feature ---
+
+export type ContributionType = "challenge" | "extend" | "source";
+
+export interface SessionInfo {
+  token: string;
+  credits: number;
+  dojo_quota: number;
+}
+
+export interface SharedIdea {
+  id: string;
+  title: string;
+  statement: string;
+  angle: string;
+  shared_at: string;
+  contribution_count: number;
+}
+
+export interface ContributionItem {
+  id: string;
+  type: ContributionType;
+  text: string;
+  quality_ok: boolean;
+  credits_awarded: number;
+  created_at: string;
+}
+
+export interface SharedIdeaDetail extends SharedIdea {
+  contributions: ContributionItem[];
+}
+
+export interface ContributionRequest {
+  idea_id: string;
+  contributor_token: string;
+  type: ContributionType;
+  text: string;
+}
+
+export interface ContributionResult {
+  id: string;
+  credits_awarded: number;
+  quality_ok: boolean;
+  quality_reason: string;
+  new_credits: number;
+}
+
+export interface CommunityFeedResponse {
+  ideas: SharedIdea[];
+  total: number;
 }
