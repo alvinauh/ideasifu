@@ -89,6 +89,16 @@ export default function Community() {
   const [postPosting, setPostPosting] = useState(false);
   const [postDone, setPostDone] = useState(false);
 
+  // Sign-in gate: persist across page loads so returning contributors skip it
+  const [joined, setJoined] = useState(
+    () => !!localStorage.getItem("ideasifu.joined"),
+  );
+
+  function signIn() {
+    localStorage.setItem("ideasifu.joined", "1");
+    setJoined(true);
+  }
+
   // Shareable-link support: auto-open an idea when ?idea=<id> is in the URL
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -397,13 +407,27 @@ export default function Community() {
                 </div>
               )}
 
-              {/* Anonymous session notice */}
-              {!session && (
-                <div className="mb-4 rounded-xl border border-border bg-surface-2 px-4 py-3 text-xs text-muted">
-                  You're contributing <strong>anonymously</strong> — your session is private to this device. No account needed.
+              {/* Sign-in gate — shown once to new visitors (e.g. via shared link) */}
+              {!joined ? (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <p className="text-sm font-semibold text-foreground">
+                    Sign in to earn credits
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Each substantive contribution earns <strong>3 credits</strong> — credits
+                    unlock extra Dojo sections. Your session is anonymous and saved to this
+                    device only. No account or email required.
+                  </p>
+                  <button
+                    onClick={signIn}
+                    className="mt-3 flex items-center gap-2 rounded-xl bg-gradient-idea px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Coins className="h-4 w-4" aria-hidden />
+                    Sign in &amp; Contribute
+                  </button>
                 </div>
-              )}
-
+              ) : (
+              <>
               {/* Contribution form */}
               {result ? (
                 <ContributionFeedback
@@ -475,6 +499,8 @@ export default function Community() {
                     </button>
                   </div>
                 </form>
+              )}
+              </>
               )}
             </div>
           )}
