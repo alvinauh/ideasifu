@@ -1,19 +1,15 @@
 """LLM client wrapper for the IdeaSifu agents.
 
-Uses OpenAI-compatible endpoints against Groq and OpenRouter (keys shared from
-the kuasaprestij stack). Every agent asks for structured JSON and we parse it
-tolerantly.
+Uses OpenAI-compatible endpoints against Groq and Gemini. Every agent asks for
+structured JSON and we parse it tolerantly.
 
 Provider strategy
 -----------------
-* Non-web agents (Ideator, Cartographer, Director, refine): Groq
-  `llama-3.3-70b-versatile` (fast) → OpenRouter free Llama fallback.
-* Web agents (Scout, Librarian): OpenRouter `:online` — the model gets live web
-  search via OpenRouter's Exa-backed plugin. Groq's chat API can't search, so it
-  is only a last-ditch no-web fallback. `:online` is billed to the OpenRouter
-  account, so it is used ONLY for the two agents that genuinely need fresh sources.
-* Pro tier (Dojo): DeepSeek V3 direct API (primary, no watermarking) →
-  Gemini 2.5 Flash via OpenRouter (fallback) → free chain as last resort.
+* Non-web agents (Ideator, Cartographer, Director, refine): Groq (fast) →
+  Gemini fallback.
+* Web agents (Scout, Librarian): Groq → Gemini fallback. (No live web-search
+  plugin available without OpenRouter; both providers use their training data.)
+* Pro tier (Dojo): Gemini 2.5 Flash (primary, high quality) → Groq fallback.
 
 If no API keys are set (or the SDK isn't installed), `is_live()` returns False
 and the orchestrator serves deterministic mock data instead — so the whole app
@@ -31,26 +27,10 @@ from pydantic import BaseModel
 
 log = logging.getLogger("ideasifu.llm")
 
-# Mirror kuasaprestij's proven free Llama-3.3-70B chain.
-GROQ_MODEL = os.environ.get("IDEASIFU_GROQ_MODEL", "llama-3.3-70b-versatile")
-# Free Groq fallback on a separate daily token quota — used when the 70B model
-# hits its per-day token limit (429), so we stay live instead of dropping to mock.
-GROQ_FALLBACK_MODEL = os.environ.get(
-    "IDEASIFU_GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant"
-)
-OPENROUTER_MODEL = os.environ.get(
-    "IDEASIFU_OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
-)
-# `:online` gives the model OpenRouter's web-search plugin (used by Scout/Librarian).
-OPENROUTER_ONLINE_MODEL = os.environ.get(
-    "IDEASIFU_OPENROUTER_ONLINE_MODEL", "meta-llama/llama-3.3-70b-instruct:online"
-)
-# Pro tier: DeepSeek V3 primary (no watermarking, ~$0.02/full generation),
-# Gemini 2.5 Flash via OpenRouter as fallback if DeepSeek fails.
-DEEPSEEK_PRO_MODEL = os.environ.get("IDEASIFU_PRO_MODEL", "deepseek-chat")
-OPENROUTER_PRO_FALLBACK_MODEL = os.environ.get(
-    "IDEASIFU_PRO_FALLBACK_MODEL", "google/gemini-2.5-flash"
-)
+GROQ_MODEL = os.environ.get("IDEASIFU_GROQ_MODEL", "openai/gpt-oss-120b")
+GROQ_FALLBACK_MODEL = os.environ.get("IDEASIFU_GROQ_FALLBACK_MODEL", "qwen/qwen3.6-27b")
+# Gemini 2.0 Flash — used as pro-tier primary and general fallback.
+GEMINI_MODEL = os.environ.get("IDEASIFU_GEMINI_MODEL", "gemini-2.0-flash")
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -71,65 +51,44 @@ def _groq_client():
     return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=key, timeout=60.0)
 
 
-def _openrouter_client():
-    key = os.environ.get("OPENROUTER_API_KEY")
+def _gemini_client():
+    key = os.environ.get("GEMINI_API_KEY")
     if OpenAI is None or not key:
         return None
     return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=key,
-        timeout=90.0,
-        default_headers={"X-Title": "IdeaSifu"},
-    )
-
-
-def _deepseek_client():
-    key = os.environ.get("DEEPSEEK_API_KEY")
-    if OpenAI is None or not key:
-        return None
-    return OpenAI(
-        base_url="https://api.deepseek.com/v1",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key=key,
         timeout=120.0,
     )
 
 
 _groq = _groq_client()
-_openrouter = _openrouter_client()
-_deepseek = _deepseek_client()
+_gemini = _gemini_client()
 
 
 def is_live() -> bool:
-    return _groq is not None or _openrouter is not None or _deepseek is not None
+    return _groq is not None or _gemini is not None
 
 
 def _providers(web: bool, pro: bool = False):
     """Ordered (client, model, label) chain to try for this call.
 
-    Pro requests lead with the paid model (OPENROUTER_PRO_MODEL) and fall
-    through to the free chain if that fails. Web agents lead with OpenRouter
-    `:online`; non-web agents lead with fast Groq.
+    Pro (Dojo) requests lead with Gemini 2.5 Flash then fall back to Groq.
+    Web and non-web agents both lead with Groq then fall back to Gemini.
     """
     chain = []
     if pro:
-        if _deepseek is not None:
-            chain.append((_deepseek, DEEPSEEK_PRO_MODEL, "deepseek:pro"))
-        if _openrouter is not None:
-            chain.append((_openrouter, OPENROUTER_PRO_FALLBACK_MODEL, "openrouter:pro-fallback"))
-    if web:
-        if _openrouter is not None:
-            chain.append((_openrouter, OPENROUTER_ONLINE_MODEL, "openrouter:online"))
-        if _groq is not None:  # no web search, but better than mock
+        if _gemini is not None:
+            chain.append((_gemini, GEMINI_MODEL, "gemini:pro"))
+        if _groq is not None:
             chain.append((_groq, GROQ_MODEL, "groq"))
-            chain.append((_groq, GROQ_FALLBACK_MODEL, "groq:8b"))
-        if _openrouter is not None:
-            chain.append((_openrouter, OPENROUTER_MODEL, "openrouter"))
+            chain.append((_groq, GROQ_FALLBACK_MODEL, "groq:fallback"))
     else:
         if _groq is not None:
             chain.append((_groq, GROQ_MODEL, "groq"))
-            chain.append((_groq, GROQ_FALLBACK_MODEL, "groq:8b"))
-        if _openrouter is not None:
-            chain.append((_openrouter, OPENROUTER_MODEL, "openrouter"))
+            chain.append((_groq, GROQ_FALLBACK_MODEL, "groq:fallback"))
+        if _gemini is not None:
+            chain.append((_gemini, GEMINI_MODEL, "gemini"))
     return chain
 
 
@@ -222,7 +181,7 @@ def generate(
     """
     chain = _providers(web, pro)
     if not chain:
-        raise LLMUnavailable("no GROQ_API_KEY or OPENROUTER_API_KEY configured")
+        raise LLMUnavailable("no GROQ_API_KEY or GEMINI_API_KEY configured")
 
     schema = model_cls.model_json_schema()
     prompt = (

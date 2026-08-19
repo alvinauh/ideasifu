@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Users,
   Swords,
@@ -12,6 +13,8 @@ import {
   XCircle,
   PenLine,
   Plus,
+  Link2,
+  Check,
 } from "lucide-react";
 import * as api from "@/lib/api";
 import { store, useStore, getOrCreateToken } from "@/lib/store";
@@ -86,7 +89,10 @@ export default function Community() {
   const [postPosting, setPostPosting] = useState(false);
   const [postDone, setPostDone] = useState(false);
 
-  // Init session and load feed on mount
+  // Shareable-link support: auto-open an idea when ?idea=<id> is in the URL
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Init session and load feed on mount; auto-open linked idea after feed loads
   useEffect(() => {
     (async () => {
       const [, feedData] = await Promise.all([
@@ -96,6 +102,14 @@ export default function Community() {
       setIdeas(feedData.ideas);
       setTotal(feedData.total);
       setLoading(false);
+
+      const linkedId = searchParams.get("idea");
+      if (linkedId) {
+        setLoadingDetail(true);
+        const detail = await api.getIdeaDetail(linkedId).catch(() => null);
+        if (detail) setSelected(detail);
+        setLoadingDetail(false);
+      }
     })();
   }, []);
 
@@ -105,9 +119,16 @@ export default function Community() {
     setContribText("");
     setContribType("challenge");
     setLoadingDetail(true);
+    setSearchParams({ idea: idea.id }, { replace: true });
     const detail = await api.getIdeaDetail(idea.id);
     setSelected(detail);
     setLoadingDetail(false);
+  }
+
+  function closeIdea() {
+    setSelected(null);
+    setResult(null);
+    setSearchParams({}, { replace: true });
   }
 
   async function handlePost(e: React.FormEvent) {
@@ -341,13 +362,16 @@ export default function Community() {
                     {selected.statement}
                   </p>
                 </div>
-                <button
-                  onClick={() => { setSelected(null); setResult(null); }}
-                  className="shrink-0 rounded-lg p-1 hover:bg-surface-2 focus:outline-none"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4 text-muted" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <CopyLinkButton ideaId={selected.id} />
+                  <button
+                    onClick={closeIdea}
+                    className="rounded-lg p-1 hover:bg-surface-2 focus:outline-none"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4 text-muted" />
+                  </button>
+                </div>
               </div>
 
               {/* Existing contributions */}
@@ -370,6 +394,13 @@ export default function Community() {
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Anonymous session notice */}
+              {!session && (
+                <div className="mb-4 rounded-xl border border-border bg-surface-2 px-4 py-3 text-xs text-muted">
+                  You're contributing <strong>anonymously</strong> — your session is private to this device. No account needed.
                 </div>
               )}
 
@@ -457,6 +488,36 @@ export default function Community() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+function CopyLinkButton({ ideaId }: { ideaId: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    const url = `${window.location.origin}/community?idea=${ideaId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <button
+      onClick={copy}
+      title={copied ? "Link copied!" : "Copy shareable link"}
+      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      {copied ? (
+        <>
+          <Check className="h-3.5 w-3.5 text-green-500" aria-hidden />
+          <span className="text-green-500">Copied!</span>
+        </>
+      ) : (
+        <>
+          <Link2 className="h-3.5 w-3.5" aria-hidden />
+          <span>Share</span>
+        </>
+      )}
+    </button>
+  );
+}
+
 function SessionBadge({ credits, dojoQuota }: { credits: number; dojoQuota: number }) {
   return (
     <div className="flex items-center gap-3">
@@ -505,6 +566,17 @@ function IdeaCard({
   loading: boolean;
   onClick: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleShare(e: React.MouseEvent) {
+    e.stopPropagation();
+    const url = `${window.location.origin}/community?idea=${idea.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <li>
       <button
@@ -535,10 +607,24 @@ function IdeaCard({
               </span>
             </div>
           </div>
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 transition-colors ${active ? "text-primary" : "text-muted"}`}
-            aria-hidden
-          />
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={handleShare}
+              title="Copy shareable link"
+              className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Copy shareable link"
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-500" aria-hidden />
+              ) : (
+                <Link2 className="h-3.5 w-3.5" aria-hidden />
+              )}
+            </button>
+            <ChevronRight
+              className={`h-4 w-4 transition-colors ${active ? "text-primary" : "text-muted"}`}
+              aria-hidden
+            />
+          </div>
         </div>
       </button>
     </li>
