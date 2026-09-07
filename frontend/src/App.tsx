@@ -6,6 +6,7 @@ import Library from "@/pages/Library";
 import Corpus from "@/pages/Corpus";
 import Dojo from "@/pages/Dojo";
 import Community from "@/pages/Community";
+import Formatter from "@/pages/Formatter";
 import SiteHeader from "@/components/SiteHeader";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/corpus" element={<Corpus />} />
         <Route path="/dojo" element={<Dojo />} />
         <Route path="/community" element={<Community />} />
+        <Route path="/format" element={<Formatter />} />
         <Route path="*" element={<Landing />} />
       </Routes>
     </div>

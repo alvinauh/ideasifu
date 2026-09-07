@@ -25,14 +25,17 @@ Run:  uvicorn main:app --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
+import io
 import os
+import tempfile
 import uuid
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import (
+    AnalysisMethod,
     Brief,
     BuildRequest,
     CommunityFeedResponse,
@@ -40,9 +43,12 @@ from schemas import (
     ContributionResult,
     CorpusSearchRequest,
     CorpusSearchResponse,
+    DataAnalysisResponse,
+    DataStructure,
     DojoCorpusExample,
     DojoGenerateRequest,
     DojoSectionResult,
+    FormatMatchResponse,
     GenerateIdeasResponse,
     IdeaCandidate,
     IdeaResult,
@@ -57,8 +63,17 @@ from schemas import (
 )
 from agents.llm import is_live
 from agents.assessor import assess
+from agents.formatter import analyze as format_analyze
 import orchestrator
 import db
+
+try:
+    import pandas as pd
+    import analysis as _analysis
+    from agents.analyst import code_themes, interpret_quantitative
+    HAS_ANALYSIS = True
+except ImportError:
+    HAS_ANALYSIS = False
 
 # ThesisSifu's additive /search endpoint (embeds with the bge-m3 model it already
 # has loaded, then vector-searches its Qdrant corpus). Reached over the shared
@@ -470,6 +485,238 @@ def community_contribute(req: ContributionRequest) -> ContributionResult:
         quality_reason=verdict.reason,
         new_credits=new_credits,
     )
+
+
+# ---------------------------------------------------------------------------
+# Data Analysis endpoint (DataSifu in the Dojo)
+# ---------------------------------------------------------------------------
+
+_MAX_FILE_MB = 10
+_ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".txt", ".sav"}
+
+
+async def _load_dataframe(file: UploadFile) -> "pd.DataFrame":
+    content = await file.read()
+    if len(content) > _MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"File exceeds {_MAX_FILE_MB} MB limit.")
+
+    name = (file.filename or "").lower()
+    ext = "." + name.rsplit(".", 1)[-1] if "." in name else ""
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{ext}'. Upload CSV, Excel (.xlsx/.xls), SPSS (.sav), or TXT.",
+        )
+
+    if ext == ".csv":
+        return pd.read_csv(io.BytesIO(content))
+    if ext in (".xlsx", ".xls"):
+        return pd.read_excel(io.BytesIO(content))
+    if ext == ".txt":
+        text = content.decode("utf-8", errors="replace")
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        if not paragraphs:
+            paragraphs = [l.strip() for l in text.splitlines() if l.strip()]
+        return pd.DataFrame({"response": paragraphs})
+    if ext == ".sav":
+        try:
+            import pyreadstat
+        except ImportError:
+            raise HTTPException(
+                status_code=422,
+                detail="SPSS (.sav) support requires pyreadstat. Use CSV or Excel instead.",
+            )
+        with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            df, _ = pyreadstat.read_sav(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+        return df
+
+    raise HTTPException(status_code=415, detail="Unrecognised file extension.")
+
+
+@app.post("/dojo/analyze", response_model=DataAnalysisResponse)
+async def dojo_analyze(
+    file: UploadFile = File(...),
+    research_question: str = Form(""),
+    language: str = Form("en"),
+    degree: str = Form("undergraduate"),
+    session_token: str = Form(""),
+) -> DataAnalysisResponse:
+    """Upload raw data (CSV/Excel/SPSS/TXT) and receive statistical analysis
+    plus an LLM-written, thesis-ready interpretation or thematic coding.
+
+    Auto-selects the appropriate test (t-test, ANOVA, Wilcoxon, chi-square,
+    correlation, regression) based on data shape and normality. For text
+    responses, performs qualitative thematic analysis (Braun & Clarke, 2006).
+    """
+    if not HAS_ANALYSIS:
+        raise HTTPException(
+            status_code=503,
+            detail="Analysis libraries (pandas/scipy) are not installed. Rebuild the container.",
+        )
+
+    if language not in ("en", "bm"):
+        language = "en"
+    if degree not in ("undergraduate", "masters", "phd"):
+        degree = "undergraduate"
+
+    df = await _load_dataframe(file)
+    if df.empty or len(df.columns) == 0:
+        raise HTTPException(status_code=422, detail="The uploaded file appears to be empty.")
+
+    # Limit to first 5000 rows for performance
+    if len(df) > 5000:
+        df = df.head(5000)
+
+    numeric_cols, categorical_cols, text_cols = _analysis.detect_column_types(df)
+    data_type = _analysis.detect_data_type(numeric_cols, categorical_cols, text_cols)
+
+    structure = DataStructure(
+        rows=len(df),
+        columns=df.columns.tolist(),
+        numeric_columns=numeric_cols,
+        categorical_columns=categorical_cols,
+        text_columns=text_cols,
+    )
+
+    quant_result, methods, detected_type = _analysis.analyze(df)
+
+    interpretation = ""
+    qual_themes = None
+    qual_summary = ""
+
+    # Quantitative interpretation via LLM
+    if quant_result is not None and quant_result.test_name != "Descriptive Statistics":
+        try:
+            stats_block = _analysis.build_stats_summary(quant_result)
+            interpretation, _ = interpret_quantitative(
+                stats_summary=stats_block,
+                research_question=research_question,
+                degree=degree,
+                language=language,
+            )
+        except Exception:
+            interpretation = ""  # degrade gracefully; raw stats still returned
+
+    # Qualitative thematic coding via LLM
+    if text_cols:
+        texts: list[str] = []
+        for col in text_cols:
+            texts.extend(df[col].dropna().astype(str).tolist())
+        if texts:
+            try:
+                themes, qual_summary = code_themes(
+                    texts=texts,
+                    research_question=research_question,
+                    degree=degree,
+                    language=language,
+                )
+                qual_themes = themes
+            except Exception:
+                qual_themes = None
+
+    word_count = len(interpretation.split()) + len(qual_summary.split())
+
+    return DataAnalysisResponse(
+        data_type=detected_type,
+        detected_structure=structure,
+        recommended_methods=methods,
+        quantitative_results=quant_result,
+        qualitative_themes=qual_themes,
+        interpretation=interpretation,
+        qualitative_summary=qual_summary,
+        language=language,
+        word_count=word_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FormatSifu: journal format matching
+# ---------------------------------------------------------------------------
+
+def _extract_docx_outline(content: bytes) -> str:
+    """Return a structured outline of headings and first-line body text from a DOCX."""
+    try:
+        from docx import Document as DocxDocument
+        doc = DocxDocument(io.BytesIO(content))
+        lines: list[str] = []
+        for para in doc.paragraphs:
+            style = para.style.name if para.style else "Normal"
+            text = para.text.strip()
+            if not text:
+                continue
+            if style.startswith("Heading"):
+                level_str = style.replace("Heading ", "").strip()
+                level = int(level_str) if level_str.isdigit() else 1
+                indent = "  " * (level - 1)
+                lines.append(f"{indent}[{style}] {text}")
+            elif style in ("Normal", "Body Text") and len(lines) > 0:
+                snippet = text[:200] + ("…" if len(text) > 200 else "")
+                lines.append(f"{'  ' * 2}[Body] {snippet}")
+        return "\n".join(lines[:150]) or "(no structured content detected)"
+    except Exception as exc:
+        return f"(DOCX extraction failed: {exc})"
+
+
+def _extract_pdf_outline(content: bytes) -> str:
+    """Return raw text from a PDF (best-effort; no semantic heading detection)."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(content))
+        lines: list[str] = []
+        for page in reader.pages[:40]:
+            page_text = page.extract_text() or ""
+            for line in page_text.split("\n"):
+                stripped = line.strip()
+                if stripped:
+                    lines.append(stripped)
+        return "\n".join(lines[:300]) or "(no text extracted from PDF)"
+    except Exception as exc:
+        return f"(PDF extraction failed: {exc})"
+
+
+def _outline_from_upload(file_content: bytes, filename: str) -> str:
+    name = (filename or "").lower()
+    if name.endswith(".pdf"):
+        return _extract_pdf_outline(file_content)
+    if name.endswith(".docx"):
+        return _extract_docx_outline(file_content)
+    raise HTTPException(
+        status_code=415,
+        detail=f"Unsupported file type '{filename}'. Upload a DOCX or PDF.",
+    )
+
+
+_FORMAT_MAX_MB = 10
+
+
+@app.post("/format-match", response_model=FormatMatchResponse)
+async def format_match(
+    journal_file: UploadFile = File(..., description="Reference journal article (DOCX or PDF)"),
+    document_file: UploadFile = File(..., description="Student's document to check (DOCX or PDF)"),
+) -> FormatMatchResponse:
+    """Upload a reference journal and a student document.
+
+    Extracts the journal's formatting conventions (heading style, numbering,
+    section order) then walks the student's document to find every mismatch
+    and produce specific, actionable suggestions.
+    """
+    j_bytes = await journal_file.read()
+    d_bytes = await document_file.read()
+
+    if len(j_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Journal file exceeds {_FORMAT_MAX_MB} MB.")
+    if len(d_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Document file exceeds {_FORMAT_MAX_MB} MB.")
+
+    journal_outline = _outline_from_upload(j_bytes, journal_file.filename or "journal.docx")
+    document_outline = _outline_from_upload(d_bytes, document_file.filename or "document.docx")
+
+    return format_analyze(journal_outline, document_outline)
 
 
 if __name__ == "__main__":

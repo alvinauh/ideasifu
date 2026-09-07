@@ -30,7 +30,7 @@ log = logging.getLogger("ideasifu.llm")
 GROQ_MODEL = os.environ.get("IDEASIFU_GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_FALLBACK_MODEL = os.environ.get("IDEASIFU_GROQ_FALLBACK_MODEL", "qwen/qwen3.6-27b")
 # Gemini 2.0 Flash — used as pro-tier primary and general fallback.
-GEMINI_MODEL = os.environ.get("IDEASIFU_GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("IDEASIFU_GEMINI_MODEL", "gemini-3.6-flash")
 
 T = TypeVar("T", bound=BaseModel)
 

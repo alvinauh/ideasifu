@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, Library as LibraryIcon, Database, GraduationCap, Users, Coins } from "lucide-react";
+import { Sparkles, Library as LibraryIcon, Database, FileText, GraduationCap, Users, Coins } from "lucide-react";
 import TierToggle from "@/components/TierToggle";
 import { USING_MOCK } from "@/lib/api";
 import { store, useStore, getOrCreateToken } from "@/lib/store";
@@ -53,6 +53,15 @@ export default function SiteHeader() {
             </Link>
           )}
           {!onLanding && <TierToggle size="sm" />}
+          <Link
+            to="/format"
+            className={`flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              pathname === "/format" ? "text-foreground" : "text-muted"
+            }`}
+          >
+            <FileText className="h-4 w-4" aria-hidden />
+            Format
+          </Link>
           <Link
             to="/community"
             className={`flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${

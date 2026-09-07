@@ -225,3 +225,35 @@ export interface CommunityFeedResponse {
   ideas: SharedIdea[];
   total: number;
 }
+
+// --- FormatSifu: journal format matching ---
+
+export interface JournalStyle {
+  chapter_label_format: string;
+  subheading_format: string;
+  numbering_scheme: string;
+  section_order: string[];
+  abstract_present: boolean;
+  keywords_present: boolean;
+  reference_style: string;
+  formatting_notes: string;
+}
+
+export type IssueSeverity = "high" | "medium" | "low";
+
+export interface FormatIssue {
+  location: string;
+  current: string;
+  expected: string;
+  severity: IssueSeverity;
+  suggestion: string;
+}
+
+export interface FormatMatchResponse {
+  journal_style: JournalStyle;
+  issues: FormatIssue[];
+  missing_sections: string[];
+  reformatted_outline: string;
+  summary: string;
+  match_score: number;
+}

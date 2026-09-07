@@ -9,6 +9,7 @@ import type {
   CorpusSearchResponse,
   DojoGenerateRequest,
   DojoSectionResult,
+  FormatMatchResponse,
   GenerateIdeasResponse,
   IdeaCandidate,
   IdeaResult,
@@ -140,4 +141,25 @@ export function getIdeaDetail(ideaId: string): Promise<SharedIdeaDetail> {
 export function contribute(req: ContributionRequest): Promise<ContributionResult> {
   if (USING_MOCK) return mock.contribute(req);
   return post<ContributionResult>("/community/contribute", req);
+}
+
+// --- FormatSifu: journal format matching ---
+
+export async function formatMatch(
+  journalFile: File,
+  documentFile: File,
+): Promise<FormatMatchResponse> {
+  if (USING_MOCK) {
+    return Promise.reject(new Error("Format matching requires the live backend."));
+  }
+  const form = new FormData();
+  form.append("journal_file", journalFile);
+  form.append("document_file", documentFile);
+  const res = await fetch(`${BASE}/format-match`, { method: "POST", body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    const msg = (detail as { detail?: string }).detail ?? res.statusText;
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
+  return res.json() as Promise<FormatMatchResponse>;
 }

@@ -4,3 +4,11 @@ pydantic>=2
 openai
 httpx
 python-multipart
+pandas
+scipy
+statsmodels
+openpyxl
+xlrd
+pyreadstat
+python-docx
+pypdf

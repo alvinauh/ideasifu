@@ -268,3 +268,92 @@ class ContributionResult(BaseModel):
 class CommunityFeedResponse(BaseModel):
     ideas: list[SharedIdea]
     total: int
+
+
+# --- Data Analysis (DataSifu in the Dojo) ---
+
+class AnalysisMethod(BaseModel):
+    name: str
+    rationale: str
+    chosen: bool = False
+
+
+class GroupStat(BaseModel):
+    group: str
+    n: int
+    mean: float = 0.0
+    sd: float = 0.0
+    median: float = 0.0
+
+
+class DataStructure(BaseModel):
+    rows: int
+    columns: list[str]
+    numeric_columns: list[str]
+    categorical_columns: list[str]
+    text_columns: list[str]
+
+
+class QuantitativeResult(BaseModel):
+    test_name: str
+    variables: list[str] = []
+    group_stats: list[GroupStat] = []
+    test_statistic_label: str = ""
+    test_statistic_value: Optional[float] = None
+    p_value: Optional[float] = None
+    significant: bool = False
+    effect_size_label: str = ""
+    effect_size_value: Optional[float] = None
+    effect_size_interpretation: str = ""
+    post_hoc: list[dict] = []
+    normality_used: bool = False
+    normality_note: str = ""
+
+
+class QualTheme(BaseModel):
+    name: str
+    description: str
+    frequency: int = 0
+    quotes: list[str] = []
+
+
+class DataAnalysisResponse(BaseModel):
+    data_type: Literal["quantitative", "qualitative", "mixed"]
+    detected_structure: DataStructure
+    recommended_methods: list[AnalysisMethod] = []
+    quantitative_results: Optional[QuantitativeResult] = None
+    qualitative_themes: Optional[list[QualTheme]] = None
+    interpretation: str = ""
+    qualitative_summary: str = ""
+    language: DojoLang = "en"
+    word_count: int = 0
+
+
+# --- FormatSifu: journal format matching ---
+
+class JournalStyle(BaseModel):
+    chapter_label_format: str
+    subheading_format: str
+    numbering_scheme: str
+    section_order: list[str] = []
+    abstract_present: bool = True
+    keywords_present: bool = True
+    reference_style: str = ""
+    formatting_notes: str = ""
+
+
+class FormatIssue(BaseModel):
+    location: str
+    current: str
+    expected: str
+    severity: str  # 'high' | 'medium' | 'low'
+    suggestion: str
+
+
+class FormatMatchResponse(BaseModel):
+    journal_style: JournalStyle
+    issues: list[FormatIssue] = []
+    missing_sections: list[str] = []
+    reformatted_outline: str = ""
+    summary: str = ""
+    match_score: int = 0
