@@ -270,7 +270,7 @@ export default function Formatter() {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
           Upload a reference journal article and your document. FormatSifu extracts the
           journal's heading style, numbering scheme, and section order — then finds every
-          mismatch in your document and tells you exactly how to fix it.
+          mismatch and produces a converted DOCX you can download.
         </p>
       </div>
 
