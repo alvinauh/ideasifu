@@ -719,6 +719,73 @@ async def format_match(
     return format_analyze(journal_outline, document_outline)
 
 
+def _apply_heading_transforms(docx_bytes: bytes, heading_map: list[dict]) -> bytes:
+    """Apply heading text/level replacements to a DOCX and return modified bytes."""
+    from docx import Document as DocxDocument
+    lookup = {entry["original"]: entry for entry in heading_map}
+    doc = DocxDocument(io.BytesIO(docx_bytes))
+    for para in doc.paragraphs:
+        style = para.style.name if para.style else ""
+        if not style.startswith("Heading"):
+            continue
+        text = para.text.strip()
+        if text not in lookup:
+            continue
+        entry = lookup[text]
+        target_level = max(1, min(9, int(entry["level"])))
+        target_style = f"Heading {target_level}"
+        try:
+            para.style = doc.styles[target_style]
+        except KeyError:
+            pass
+        replacement = entry["replacement"]
+        if para.runs:
+            para.runs[0].text = replacement
+            for run in para.runs[1:]:
+                run.text = ""
+        else:
+            para.add_run(replacement)
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+@app.post("/format-transform")
+async def format_transform(
+    document_file: UploadFile = File(..., description="Student's DOCX to transform"),
+    heading_map: str = Form(..., description="JSON array of {original, replacement, level} objects"),
+):
+    """Apply heading transformations to a DOCX and return the modified file."""
+    import json
+    from fastapi.responses import Response
+
+    d_bytes = await document_file.read()
+    if len(d_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Document file exceeds {_FORMAT_MAX_MB} MB.")
+
+    fname = document_file.filename or "document.docx"
+    if not fname.lower().endswith(".docx"):
+        raise HTTPException(status_code=415, detail="Only DOCX files can be transformed.")
+
+    try:
+        replacements = json.loads(heading_map)
+    except Exception:
+        raise HTTPException(status_code=422, detail="heading_map must be valid JSON.")
+
+    try:
+        result_bytes = _apply_heading_transforms(d_bytes, replacements)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Transform failed: {exc}")
+
+    stem = fname.rsplit(".", 1)[0]
+    out_name = f"{stem}_converted.docx"
+    return Response(
+        content=result_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{out_name}"'},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
 

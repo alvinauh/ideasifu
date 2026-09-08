@@ -15,6 +15,12 @@ from pydantic import BaseModel, Field
 from agents.llm import generate
 
 
+class HeadingReplacement(BaseModel):
+    original: str = Field(..., description="Exact heading text as it appears in the student's document")
+    replacement: str = Field(..., description="Corrected heading text that matches the journal's format")
+    level: int = Field(..., description="Target heading level: 1 for chapter, 2 for section, 3 for subsection")
+
+
 class _JournalStyle(BaseModel):
     chapter_label_format: str = Field(
         ...,
@@ -58,6 +64,14 @@ class _FormatterOutput(BaseModel):
     missing_sections: list[str] = Field(
         [], description="Sections present in the journal that are absent from the student's document"
     )
+    heading_map: list[HeadingReplacement] = Field(
+        [],
+        description=(
+            "One entry per heading in the student's document that needs changing. "
+            "original must match the heading text exactly as it appears. "
+            "replacement is the corrected text. level is the target Word heading level (1/2/3)."
+        ),
+    )
     reformatted_outline: str = Field(
         "", description="The student's document headings rewritten to match the journal format — show what the corrected structure should look like"
     )
@@ -73,6 +87,7 @@ class FormatMatchResponse(BaseModel):
     journal_style: _JournalStyle
     issues: list[FormatIssue] = []
     missing_sections: list[str] = []
+    heading_map: list[HeadingReplacement] = []
     reformatted_outline: str = ""
     summary: str = ""
     match_score: int = 0
@@ -93,9 +108,13 @@ Your tasks:
   C. For each mismatch write a specific, actionable suggestion — show the
      student EXACTLY what to change, not general advice.
   D. List sections from the journal that are absent from the student document.
-  E. Produce a "reformatted outline": rewrite the student's heading list as it
+  E. Produce a heading_map: for EVERY heading in the student's document that
+     needs a text or level change, emit one HeadingReplacement with the exact
+     original text, the corrected replacement text, and the target level (1/2/3).
+     Headings that are already correct may be omitted.
+  F. Produce a "reformatted outline": rewrite the student's heading list as it
      should look after all fixes are applied.
-  F. Give a match_score (0-100) and a 2-3 sentence summary.
+  G. Give a match_score (0-100) and a 2-3 sentence summary.
 
 Be precise. A student must be able to apply every suggestion without further
 clarification. Number formatting is a high-severity issue; minor label differences
@@ -121,6 +140,7 @@ def analyze(journal_outline: str, document_outline: str) -> FormatMatchResponse:
         journal_style=out.journal_style,
         issues=out.issues,
         missing_sections=out.missing_sections,
+        heading_map=out.heading_map,
         reformatted_outline=out.reformatted_outline,
         summary=out.summary,
         match_score=min(100, max(0, out.match_score)),

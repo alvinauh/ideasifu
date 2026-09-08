@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   FileText,
   Info,
   Loader2,
@@ -201,6 +202,7 @@ export default function Formatter() {
   const [journalFile, setJournalFile] = useState<File | null>(null);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [transforming, setTransforming] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<FormatMatchResponse | null>(null);
   const [showOutline, setShowOutline] = useState(false);
@@ -217,6 +219,29 @@ export default function Formatter() {
       setError(e instanceof Error ? e.message : "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function downloadConverted() {
+    if (!docFile || !result || transforming) return;
+    if (!docFile.name.toLowerCase().endsWith(".docx")) {
+      setError("Document transformation is only supported for DOCX files. PDF conversion is not available.");
+      return;
+    }
+    setTransforming(true);
+    setError("");
+    try {
+      const blob = await api.formatTransform(docFile, result.heading_map);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = docFile.name.replace(/\.docx$/i, "_converted.docx");
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Transform failed. Please try again.");
+    } finally {
+      setTransforming(false);
     }
   }
 
@@ -363,6 +388,38 @@ export default function Formatter() {
               </div>
             </div>
           </div>
+
+          {/* Transform download */}
+          {result.heading_map.length > 0 && docFile?.name.toLowerCase().endsWith(".docx") && (
+            <div className="card-shadow flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-5">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {result.heading_map.length} heading{result.heading_map.length !== 1 ? "s" : ""} will be rewritten
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Download your DOCX with all heading fixes already applied.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={downloadConverted}
+                disabled={transforming}
+                className="flex shrink-0 items-center gap-2 rounded-xl bg-gradient-idea px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {transforming ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Converting…
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" aria-hidden />
+                    Download Converted DOCX
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Journal style */}
           <StyleCard style={result.journal_style} />

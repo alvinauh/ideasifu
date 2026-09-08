@@ -249,10 +249,17 @@ export interface FormatIssue {
   suggestion: string;
 }
 
+export interface HeadingReplacement {
+  original: string;
+  replacement: string;
+  level: number;
+}
+
 export interface FormatMatchResponse {
   journal_style: JournalStyle;
   issues: FormatIssue[];
   missing_sections: string[];
+  heading_map: HeadingReplacement[];
   reformatted_outline: string;
   summary: string;
   match_score: number;

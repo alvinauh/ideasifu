@@ -10,6 +10,7 @@ import type {
   DojoGenerateRequest,
   DojoSectionResult,
   FormatMatchResponse,
+  HeadingReplacement,
   GenerateIdeasResponse,
   IdeaCandidate,
   IdeaResult,
@@ -162,4 +163,23 @@ export async function formatMatch(
     throw Object.assign(new Error(msg), { status: res.status });
   }
   return res.json() as Promise<FormatMatchResponse>;
+}
+
+export async function formatTransform(
+  documentFile: File,
+  headingMap: HeadingReplacement[],
+): Promise<Blob> {
+  if (USING_MOCK) {
+    return Promise.reject(new Error("Format transform requires the live backend."));
+  }
+  const form = new FormData();
+  form.append("document_file", documentFile);
+  form.append("heading_map", JSON.stringify(headingMap));
+  const res = await fetch(`${BASE}/format-transform`, { method: "POST", body: form });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    const msg = (detail as { detail?: string }).detail ?? res.statusText;
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
+  return res.blob();
 }

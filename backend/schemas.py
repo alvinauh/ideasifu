@@ -350,10 +350,17 @@ class FormatIssue(BaseModel):
     suggestion: str
 
 
+class HeadingReplacement(BaseModel):
+    original: str
+    replacement: str
+    level: int
+
+
 class FormatMatchResponse(BaseModel):
     journal_style: JournalStyle
     issues: list[FormatIssue] = []
     missing_sections: list[str] = []
+    heading_map: list[HeadingReplacement] = []
     reformatted_outline: str = ""
     summary: str = ""
     match_score: int = 0
