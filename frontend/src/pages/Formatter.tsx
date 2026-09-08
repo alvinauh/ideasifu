@@ -396,14 +396,19 @@ export default function Formatter() {
           </div>
 
           {/* Transform download */}
-          {result.heading_map.length > 0 && docFile?.name.toLowerCase().endsWith(".docx") && (
+          {docFile?.name.toLowerCase().endsWith(".docx") && (
             <div className="card-shadow flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-5">
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {result.heading_map.length} heading{result.heading_map.length !== 1 ? "s" : ""} will be rewritten
+                  Download converted manuscript
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
-                  Download your DOCX with all heading fixes already applied.
+                  {[
+                    result.heading_map.length > 0 && `${result.heading_map.length} heading${result.heading_map.length !== 1 ? "s" : ""} rewritten`,
+                    result.missing_sections.length > 0 && `${result.missing_sections.length} missing section${result.missing_sections.length !== 1 ? "s" : ""} added`,
+                    "sections reordered",
+                    "journal styles applied",
+                  ].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <button
