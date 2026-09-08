@@ -11,7 +11,11 @@ cd "$(dirname "$0")"
 KUASA_ENV="/root/kuasaprestij/.env"
 if [[ -f "$KUASA_ENV" ]]; then
 	GROQ_API_KEY="$(grep -E '^GROQ_API_KEY=' "$KUASA_ENV" | head -1 | cut -d= -f2-)"
-	GEMINI_API_KEY="$(grep -E '^GEMINI_API_KEY=' "$KUASA_ENV" | head -1 | cut -d= -f2-)"
+	# Prefer a dedicated ideasifu key if set; fall back to the shared key
+	GEMINI_API_KEY="$(grep -E '^IDEASIFU_GEMINI_API_KEY=' "$KUASA_ENV" | head -1 | cut -d= -f2-)"
+	if [[ -z "$GEMINI_API_KEY" ]]; then
+		GEMINI_API_KEY="$(grep -E '^GEMINI_API_KEY=' "$KUASA_ENV" | head -1 | cut -d= -f2-)"
+	fi
 	export GROQ_API_KEY GEMINI_API_KEY
 else
 	echo "WARN: $KUASA_ENV not found — starting in mock mode." >&2
