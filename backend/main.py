@@ -655,9 +655,9 @@ def _extract_docx_outline(content: bytes) -> str:
                 indent = "  " * (level - 1)
                 lines.append(f"{indent}[{style}] {text}")
             elif style in ("Normal", "Body Text") and len(lines) > 0:
-                snippet = text[:200] + ("…" if len(text) > 200 else "")
+                snippet = text[:120] + ("…" if len(text) > 120 else "")
                 lines.append(f"{'  ' * 2}[Body] {snippet}")
-        return "\n".join(lines[:150]) or "(no structured content detected)"
+        return "\n".join(lines[:80]) or "(no structured content detected)"
     except Exception as exc:
         return f"(DOCX extraction failed: {exc})"
 
@@ -668,13 +668,13 @@ def _extract_pdf_outline(content: bytes) -> str:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content))
         lines: list[str] = []
-        for page in reader.pages[:40]:
+        for page in reader.pages[:20]:
             page_text = page.extract_text() or ""
             for line in page_text.split("\n"):
                 stripped = line.strip()
                 if stripped:
                     lines.append(stripped)
-        return "\n".join(lines[:300]) or "(no text extracted from PDF)"
+        return "\n".join(lines[:150]) or "(no text extracted from PDF)"
     except Exception as exc:
         return f"(PDF extraction failed: {exc})"
 
