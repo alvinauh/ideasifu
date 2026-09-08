@@ -236,6 +236,7 @@ export default function Formatter() {
         result.heading_map,
         result.journal_style.section_order,
         result.missing_sections,
+        journalFile ?? undefined,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

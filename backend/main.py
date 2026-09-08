@@ -719,13 +719,42 @@ async def format_match(
     return format_analyze(journal_outline, document_outline)
 
 
+def _copy_journal_styles(journal_bytes: bytes, student_doc) -> None:
+    """Overwrite student document's style definitions with the journal's."""
+    import copy
+    from docx import Document as DocxDocument
+    from docx.oxml.ns import qn
+
+    journal_doc = DocxDocument(io.BytesIO(journal_bytes))
+    j_styles = journal_doc.part.styles.element
+    s_styles = student_doc.part.styles.element
+
+    # Index existing student styles by styleId for fast lookup
+    existing = {}
+    for el in list(s_styles):
+        sid = el.get(qn("w:styleId"))
+        if sid:
+            existing[sid] = el
+
+    # Replace matching styles; append new ones
+    for j_el in j_styles:
+        sid = j_el.get(qn("w:styleId"))
+        if not sid:
+            continue
+        if sid in existing:
+            s_styles.remove(existing[sid])
+        s_styles.append(copy.deepcopy(j_el))
+
+
 def _transform_document(
     docx_bytes: bytes,
     heading_map: list[dict],
     section_order: list[str],
     missing_sections: list[str],
+    journal_bytes: bytes | None = None,
 ) -> bytes:
-    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders."""
+    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders,
+    and optionally inject the journal's style definitions."""
     import copy
     from docx import Document as DocxDocument
     from docx.oxml import OxmlElement
@@ -861,6 +890,9 @@ def _transform_document(
     if sectPr is not None:
         body.append(sectPr)
 
+    if journal_bytes:
+        _copy_journal_styles(journal_bytes, doc)
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -872,8 +904,10 @@ async def format_transform(
     heading_map: str = Form(..., description="JSON array of {original, replacement, level} objects"),
     section_order: str = Form("[]", description="JSON array of section names in target order"),
     missing_sections: str = Form("[]", description="JSON array of section names absent from the document"),
+    journal_file: UploadFile = File(None, description="Reference journal DOCX to copy styles from (optional)"),
 ):
-    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders."""
+    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders,
+    and apply the journal's style definitions."""
     import json
     from fastapi.responses import Response
 
@@ -885,6 +919,13 @@ async def format_transform(
     if not fname.lower().endswith(".docx"):
         raise HTTPException(status_code=415, detail="Only DOCX files can be transformed.")
 
+    j_bytes: bytes | None = None
+    if journal_file is not None:
+        j_bytes = await journal_file.read()
+        jname = (journal_file.filename or "").lower()
+        if not jname.endswith(".docx"):
+            j_bytes = None  # silently skip style copy for non-DOCX journal
+
     try:
         replacements = json.loads(heading_map)
         order = json.loads(section_order)
@@ -893,7 +934,7 @@ async def format_transform(
         raise HTTPException(status_code=422, detail="heading_map, section_order, and missing_sections must be valid JSON.")
 
     try:
-        result_bytes = _transform_document(d_bytes, replacements, order, missing)
+        result_bytes = _transform_document(d_bytes, replacements, order, missing, j_bytes)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Transform failed: {exc}")
 
