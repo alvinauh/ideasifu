@@ -135,7 +135,7 @@ def analyze(journal_outline: str, document_outline: str) -> FormatMatchResponse:
         "produce the corrected outline, and give a match score."
     )
 
-    out = generate(_SYSTEM, user, _FormatterOutput, max_tokens=4000)
+    out = generate(_SYSTEM, user, _FormatterOutput, max_tokens=8192)
     return FormatMatchResponse(
         journal_style=out.journal_style,
         issues=out.issues,
