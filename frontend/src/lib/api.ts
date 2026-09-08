@@ -168,6 +168,8 @@ export async function formatMatch(
 export async function formatTransform(
   documentFile: File,
   headingMap: HeadingReplacement[],
+  sectionOrder: string[],
+  missingSections: string[],
 ): Promise<Blob> {
   if (USING_MOCK) {
     return Promise.reject(new Error("Format transform requires the live backend."));
@@ -175,6 +177,8 @@ export async function formatTransform(
   const form = new FormData();
   form.append("document_file", documentFile);
   form.append("heading_map", JSON.stringify(headingMap));
+  form.append("section_order", JSON.stringify(sectionOrder));
+  form.append("missing_sections", JSON.stringify(missingSections));
   const res = await fetch(`${BASE}/format-transform`, { method: "POST", body: form });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));

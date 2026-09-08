@@ -719,32 +719,148 @@ async def format_match(
     return format_analyze(journal_outline, document_outline)
 
 
-def _apply_heading_transforms(docx_bytes: bytes, heading_map: list[dict]) -> bytes:
-    """Apply heading text/level replacements to a DOCX and return modified bytes."""
+def _transform_document(
+    docx_bytes: bytes,
+    heading_map: list[dict],
+    section_order: list[str],
+    missing_sections: list[str],
+) -> bytes:
+    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders."""
+    import copy
     from docx import Document as DocxDocument
-    lookup = {entry["original"]: entry for entry in heading_map}
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
     doc = DocxDocument(io.BytesIO(docx_bytes))
-    for para in doc.paragraphs:
-        style = para.style.name if para.style else ""
-        if not style.startswith("Heading"):
-            continue
-        text = para.text.strip()
-        if text not in lookup:
-            continue
-        entry = lookup[text]
-        target_level = max(1, min(9, int(entry["level"])))
-        target_style = f"Heading {target_level}"
-        try:
-            para.style = doc.styles[target_style]
-        except KeyError:
-            pass
-        replacement = entry["replacement"]
-        if para.runs:
-            para.runs[0].text = replacement
-            for run in para.runs[1:]:
-                run.text = ""
+    lookup = {e["original"]: e for e in heading_map}
+    body = doc.element.body
+    sectPr = body.find(qn("w:sectPr"))
+
+    def _get_style_val(el):
+        pPr = el.find(qn("w:pPr"))
+        if pPr is None:
+            return None
+        pStyle = pPr.find(qn("w:pStyle"))
+        return pStyle.get(qn("w:val")) if pStyle is not None else None
+
+    def _el_text(el):
+        return "".join(t.text or "" for t in el.iter(qn("w:t")))
+
+    def _is_h1(el):
+        style = _get_style_val(el)
+        return style is not None and style.lower() in ("heading1", "heading 1")
+
+    def _set_heading(el, text, level):
+        pPr = el.find(qn("w:pPr"))
+        if pPr is None:
+            pPr = OxmlElement("w:pPr")
+            el.insert(0, pPr)
+        pStyle = pPr.find(qn("w:pStyle"))
+        if pStyle is None:
+            pStyle = OxmlElement("w:pStyle")
+            pPr.insert(0, pStyle)
+        pStyle.set(qn("w:val"), f"Heading{level}")
+        for t in list(el.iter(qn("w:t"))):
+            t.text = ""
+        runs = el.findall(f".//{qn('w:r')}")
+        if runs:
+            t = runs[0].find(qn("w:t"))
+            if t is None:
+                t = OxmlElement("w:t")
+                runs[0].append(t)
+            t.text = text
+            for r in runs[1:]:
+                for t2 in r.findall(qn("w:t")):
+                    t2.text = ""
         else:
-            para.add_run(replacement)
+            r = OxmlElement("w:r")
+            t = OxmlElement("w:t")
+            t.text = text
+            r.append(t)
+            el.append(r)
+
+    def _make_heading_el(text, level):
+        p = OxmlElement("w:p")
+        pPr = OxmlElement("w:pPr")
+        pStyle = OxmlElement("w:pStyle")
+        pStyle.set(qn("w:val"), f"Heading{level}")
+        pPr.append(pStyle)
+        p.append(pPr)
+        r = OxmlElement("w:r")
+        t = OxmlElement("w:t")
+        t.text = text
+        r.append(t)
+        p.append(r)
+        return p
+
+    def _make_body_el(text):
+        p = OxmlElement("w:p")
+        r = OxmlElement("w:r")
+        t = OxmlElement("w:t")
+        t.text = text
+        r.append(t)
+        p.append(r)
+        return p
+
+    # Group body elements into: preamble + list of (heading_el, [child_els])
+    preamble, sections, current_body = [], [], []
+    current_heading = None
+    for el in list(body):
+        if el is sectPr:
+            continue
+        tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+        if tag == "p" and _is_h1(el):
+            if current_heading is None:
+                preamble = list(current_body)
+            else:
+                sections.append((current_heading, list(current_body)))
+            current_heading = el
+            current_body = []
+        else:
+            current_body.append(el)
+    if current_heading is not None:
+        sections.append((current_heading, list(current_body)))
+    elif current_body:
+        preamble = list(current_body)
+
+    # Apply heading_map renames/level changes
+    renamed = []
+    for h_el, body_els in sections:
+        text = _el_text(h_el).strip()
+        if text in lookup:
+            entry = lookup[text]
+            new_text = entry["replacement"]
+            new_level = max(1, min(9, int(entry["level"])))
+        else:
+            new_text = text
+            new_level = 1
+        _set_heading(h_el, new_text, new_level)
+        renamed.append((new_text, new_level, h_el, body_els))
+
+    # Reorder top-level sections by section_order
+    order_map = {name.strip().upper(): i for i, name in enumerate(section_order)}
+    renamed.sort(key=lambda s: order_map.get(s[0].strip().upper(), 999))
+
+    # Rebuild body
+    for child in list(body):
+        body.remove(child)
+    for el in preamble:
+        body.append(el)
+    existing = {s[0].strip().upper() for s in renamed}
+    for new_text, new_level, h_el, body_els in renamed:
+        body.append(h_el)
+        for el in body_els:
+            body.append(el)
+
+    # Append missing sections as labelled placeholders
+    for missing in missing_sections:
+        if missing.strip().upper() not in existing:
+            body.append(_make_heading_el(missing, 1))
+            body.append(_make_body_el("[Add content for this section]"))
+
+    if sectPr is not None:
+        body.append(sectPr)
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -754,8 +870,10 @@ def _apply_heading_transforms(docx_bytes: bytes, heading_map: list[dict]) -> byt
 async def format_transform(
     document_file: UploadFile = File(..., description="Student's DOCX to transform"),
     heading_map: str = Form(..., description="JSON array of {original, replacement, level} objects"),
+    section_order: str = Form("[]", description="JSON array of section names in target order"),
+    missing_sections: str = Form("[]", description="JSON array of section names absent from the document"),
 ):
-    """Apply heading transformations to a DOCX and return the modified file."""
+    """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders."""
     import json
     from fastapi.responses import Response
 
@@ -769,11 +887,13 @@ async def format_transform(
 
     try:
         replacements = json.loads(heading_map)
+        order = json.loads(section_order)
+        missing = json.loads(missing_sections)
     except Exception:
-        raise HTTPException(status_code=422, detail="heading_map must be valid JSON.")
+        raise HTTPException(status_code=422, detail="heading_map, section_order, and missing_sections must be valid JSON.")
 
     try:
-        result_bytes = _apply_heading_transforms(d_bytes, replacements)
+        result_bytes = _transform_document(d_bytes, replacements, order, missing)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Transform failed: {exc}")
 

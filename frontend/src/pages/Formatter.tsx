@@ -231,7 +231,12 @@ export default function Formatter() {
     setTransforming(true);
     setError("");
     try {
-      const blob = await api.formatTransform(docFile, result.heading_map);
+      const blob = await api.formatTransform(
+        docFile,
+        result.heading_map,
+        result.journal_style.section_order,
+        result.missing_sections,
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
