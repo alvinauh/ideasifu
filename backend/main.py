@@ -63,7 +63,7 @@ from schemas import (
 )
 from agents.llm import is_live
 from agents.assessor import assess
-from agents.formatter import analyze as format_analyze
+from agents.formatter import analyze as format_analyze, reformat_references_apa
 import orchestrator
 import db
 
@@ -639,11 +639,37 @@ async def dojo_analyze(
 # ---------------------------------------------------------------------------
 
 def _extract_docx_outline(content: bytes) -> str:
-    """Return a structured outline of headings and first-line body text from a DOCX."""
+    """Return a structured outline of headings plus a confirmed-present section list."""
     try:
         from docx import Document as DocxDocument
         doc = DocxDocument(io.BytesIO(content))
+        all_texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+
+        # Detect key academic sections regardless of heading style
+        def _text_matches(candidates):
+            return any(t.lower().strip() in candidates for t in all_texts)
+
+        present: list[str] = []
+        if _text_matches({"abstract"}):
+            present.append("ABSTRACT")
+        if any("keyword" in t.lower() for t in all_texts[:30]):
+            present.append("KEYWORDS")
+        if _text_matches({"references", "bibliography", "list of references", "reference list"}):
+            present.append("REFERENCES")
+        if _text_matches({"acknowledgment", "acknowledgement", "acknowledgments", "acknowledgements"}):
+            present.append("ACKNOWLEDGMENT")
+        if any("conflict of interest" in t.lower() for t in all_texts):
+            present.append("CONFLICT OF INTEREST STATEMENT")
+        if _text_matches({"appendix", "appendices"}):
+            present.append("APPENDIX")
+
         lines: list[str] = []
+        if present:
+            lines.append(f"[KEY SECTIONS CONFIRMED PRESENT: {', '.join(present)}]")
+            lines.append("")
+
+        # Heading structure — show one body snippet per heading section
+        shown_body = False
         for para in doc.paragraphs:
             style = para.style.name if para.style else "Normal"
             text = para.text.strip()
@@ -654,10 +680,13 @@ def _extract_docx_outline(content: bytes) -> str:
                 level = int(level_str) if level_str.isdigit() else 1
                 indent = "  " * (level - 1)
                 lines.append(f"{indent}[{style}] {text}")
-            elif style in ("Normal", "Body Text") and len(lines) > 0:
+                shown_body = False
+            elif not shown_body and style in ("Normal", "Body Text"):
                 snippet = text[:120] + ("…" if len(text) > 120 else "")
-                lines.append(f"{'  ' * 2}[Body] {snippet}")
-        return "\n".join(lines[:80]) or "(no structured content detected)"
+                lines.append(f"    [Body] {snippet}")
+                shown_body = True
+
+        return "\n".join(lines[:150]) or "(no structured content detected)"
     except Exception as exc:
         return f"(DOCX extraction failed: {exc})"
 
@@ -759,6 +788,30 @@ def _copy_journal_styles(journal_bytes: bytes, student_doc) -> None:
         s_styles.append(copy.deepcopy(j_el))
 
 
+_SECTION_TEMPLATES: dict[str, list[str]] = {
+    "ABSTRACT": [
+        "Purpose – [State the background and aims of the study.]",
+        "Methodology – [State the research design, sampling design, sample size, instruments, and data analysis method.]",
+        "Findings – [State the main results. Include key numerical outcomes where applicable.]",
+        "Novelty – [State the originality or contribution of the research.]",
+        "Significance – [State who would benefit from this study and how.]",
+    ],
+    "KEYWORDS": ["Keywords: [keyword1, keyword2, keyword3, keyword4, keyword5]"],
+    "ACKNOWLEDGMENT": [
+        "This research received no specific grant from any funding agency in the public, commercial, or not-for-profit sectors.",
+    ],
+    "CONFLICT OF INTEREST STATEMENT": [
+        "The authors declare no conflict of interest.",
+    ],
+    "APPENDIX": ["[Insert supplementary materials, instruments, or data tables here.]"],
+}
+
+_REF_HEADING_ALIASES = {
+    "references", "bibliography", "list of references", "reference list",
+    "references cited", "works cited",
+}
+
+
 def _transform_document(
     docx_bytes: bytes,
     heading_map: list[dict],
@@ -767,7 +820,7 @@ def _transform_document(
     journal_bytes: bytes | None = None,
 ) -> bytes:
     """Fully convert a DOCX: rename headings, reorder sections, add missing placeholders,
-    and optionally inject the journal's style definitions."""
+    reformat the references section to APA 7th, and optionally inject journal styles."""
     import copy
     from docx import Document as DocxDocument
     from docx.oxml import OxmlElement
@@ -790,7 +843,17 @@ def _transform_document(
 
     def _is_h1(el):
         style = _get_style_val(el)
-        return style is not None and style.lower() in ("heading1", "heading 1")
+        if style is None:
+            return False
+        s = style.lower().replace(" ", "")
+        return s in ("heading1", "h1", "1") or s.startswith("heading1")
+
+    def _is_any_heading(el):
+        style = _get_style_val(el)
+        if style is None:
+            return False
+        s = style.lower().replace(" ", "")
+        return s.startswith("heading") or s in ("h1", "h2", "h3", "h4", "h5", "h6")
 
     def _set_heading(el, text, level):
         pPr = el.find(qn("w:pPr"))
@@ -844,14 +907,30 @@ def _transform_document(
         p.append(r)
         return p
 
-    # Group body elements into: preamble + list of (heading_el, [child_els])
+    def _set_run_text(el, text):
+        """Replace all run text in an existing paragraph element."""
+        for t in list(el.iter(qn("w:t"))):
+            t.text = ""
+        runs = el.findall(f".//{qn('w:r')}")
+        if runs:
+            t_el = runs[0].find(qn("w:t"))
+            if t_el is None:
+                t_el = OxmlElement("w:t")
+                runs[0].append(t_el)
+            t_el.text = text
+            for r in runs[1:]:
+                for t2 in r.findall(qn("w:t")):
+                    t2.text = ""
+
+    # Group body elements: preamble + list of (heading_el, [child_els])
+    # Split on ANY heading (H1–H6) so sub-sections are not orphaned.
     preamble, sections, current_body = [], [], []
     current_heading = None
     for el in list(body):
         if el is sectPr:
             continue
         tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
-        if tag == "p" and _is_h1(el):
+        if tag == "p" and _is_any_heading(el):
             if current_heading is None:
                 preamble = list(current_body)
             else:
@@ -865,23 +944,33 @@ def _transform_document(
     elif current_body:
         preamble = list(current_body)
 
-    # Apply heading_map renames/level changes
+    # Apply heading_map renames/level changes; detect which sections are H1
     renamed = []
     for h_el, body_els in sections:
         text = _el_text(h_el).strip()
+        orig_is_h1 = _is_h1(h_el)
         if text in lookup:
             entry = lookup[text]
             new_text = entry["replacement"]
             new_level = max(1, min(9, int(entry["level"])))
         else:
             new_text = text
-            new_level = 1
+            new_level = 1 if orig_is_h1 else (
+                int((_get_style_val(h_el) or "Heading1").replace("Heading", "").replace(" ", "") or "1")
+                if _is_any_heading(h_el) else 1
+            )
         _set_heading(h_el, new_text, new_level)
         renamed.append((new_text, new_level, h_el, body_els))
 
-    # Reorder top-level sections by section_order
+    # Reorder top-level (level-1) sections; sub-sections stay attached
     order_map = {name.strip().upper(): i for i, name in enumerate(section_order)}
-    renamed.sort(key=lambda s: order_map.get(s[0].strip().upper(), 999))
+
+    def _sort_key(s):
+        if s[1] == 1:  # only reorder H1 sections
+            return order_map.get(s[0].strip().upper(), 999)
+        return 999
+
+    renamed.sort(key=_sort_key)
 
     # Rebuild body
     for child in list(body):
@@ -889,19 +978,38 @@ def _transform_document(
     for el in preamble:
         body.append(el)
     existing = {s[0].strip().upper() for s in renamed}
+    refs_section_body_els: list = []  # collect ref paragraph elements for APA pass
     for new_text, new_level, h_el, body_els in renamed:
         body.append(h_el)
         for el in body_els:
             body.append(el)
+        if new_text.strip().lower() in _REF_HEADING_ALIASES:
+            refs_section_body_els = body_els
 
-    # Append missing sections as labelled placeholders
+    # Append truly missing sections with structured templates
     for missing in missing_sections:
-        if missing.strip().upper() not in existing:
+        key = missing.strip().upper()
+        if key not in existing:
             body.append(_make_heading_el(missing, 1))
-            body.append(_make_body_el("[Add content for this section]"))
+            templates = _SECTION_TEMPLATES.get(key, ["[Add content for this section]"])
+            for line in templates:
+                body.append(_make_body_el(line))
 
     if sectPr is not None:
         body.append(sectPr)
+
+    # APA reformat pass — find body paragraphs under the References heading
+    # and replace their text with properly formatted APA 7th edition entries.
+    if refs_section_body_els:
+        ref_paras = [
+            el for el in refs_section_body_els
+            if el.tag.split("}")[-1] == "p" and _el_text(el).strip()
+        ]
+        raw_refs = [_el_text(p).strip() for p in ref_paras]
+        if raw_refs:
+            reformatted = reformat_references_apa(raw_refs)
+            for p_el, new_ref in zip(ref_paras, reformatted):
+                _set_run_text(p_el, new_ref)
 
     if journal_bytes:
         _copy_journal_styles(journal_bytes, doc)
