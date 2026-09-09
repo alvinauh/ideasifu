@@ -842,18 +842,20 @@ def _transform_document(
         return "".join(t.text or "" for t in el.iter(qn("w:t")))
 
     def _is_h1(el):
-        style = _get_style_val(el)
-        if style is None:
+        pPr = el.find(qn("w:pPr"))
+        if pPr is None:
             return False
-        s = style.lower().replace(" ", "")
-        return s in ("heading1", "h1", "1") or s.startswith("heading1")
-
-    def _is_any_heading(el):
-        style = _get_style_val(el)
-        if style is None:
-            return False
-        s = style.lower().replace(" ", "")
-        return s.startswith("heading") or s in ("h1", "h2", "h3", "h4", "h5", "h6")
+        # Check by style name
+        pStyle = pPr.find(qn("w:pStyle"))
+        if pStyle is not None:
+            val = (pStyle.get(qn("w:val")) or "").lower().replace(" ", "")
+            if val in ("heading1", "h1"):
+                return True
+        # Check outlineLvl — val="0" means Heading 1 regardless of style name
+        outlineLvl = pPr.find(qn("w:outlineLvl"))
+        if outlineLvl is not None and outlineLvl.get(qn("w:val")) == "0":
+            return True
+        return False
 
     def _set_heading(el, text, level):
         pPr = el.find(qn("w:pPr"))
@@ -923,14 +925,14 @@ def _transform_document(
                     t2.text = ""
 
     # Group body elements: preamble + list of (heading_el, [child_els])
-    # Split on ANY heading (H1–H6) so sub-sections are not orphaned.
+    # Split only on H1 so sub-sections (H2/H3…) stay inside their parent section.
     preamble, sections, current_body = [], [], []
     current_heading = None
     for el in list(body):
         if el is sectPr:
             continue
         tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
-        if tag == "p" and _is_any_heading(el):
+        if tag == "p" and _is_h1(el):
             if current_heading is None:
                 preamble = list(current_body)
             else:
@@ -944,33 +946,23 @@ def _transform_document(
     elif current_body:
         preamble = list(current_body)
 
-    # Apply heading_map renames/level changes; detect which sections are H1
+    # Apply heading_map renames/level changes
     renamed = []
     for h_el, body_els in sections:
         text = _el_text(h_el).strip()
-        orig_is_h1 = _is_h1(h_el)
         if text in lookup:
             entry = lookup[text]
             new_text = entry["replacement"]
             new_level = max(1, min(9, int(entry["level"])))
         else:
             new_text = text
-            new_level = 1 if orig_is_h1 else (
-                int((_get_style_val(h_el) or "Heading1").replace("Heading", "").replace(" ", "") or "1")
-                if _is_any_heading(h_el) else 1
-            )
+            new_level = 1
         _set_heading(h_el, new_text, new_level)
         renamed.append((new_text, new_level, h_el, body_els))
 
-    # Reorder top-level (level-1) sections; sub-sections stay attached
+    # Reorder sections to match section_order
     order_map = {name.strip().upper(): i for i, name in enumerate(section_order)}
-
-    def _sort_key(s):
-        if s[1] == 1:  # only reorder H1 sections
-            return order_map.get(s[0].strip().upper(), 999)
-        return 999
-
-    renamed.sort(key=_sort_key)
+    renamed.sort(key=lambda s: order_map.get(s[0].strip().upper(), 999))
 
     # Rebuild body
     for child in list(body):
