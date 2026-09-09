@@ -696,27 +696,40 @@ _FORMAT_MAX_MB = 10
 
 @app.post("/format-match", response_model=FormatMatchResponse)
 async def format_match(
-    journal_file: UploadFile = File(..., description="Reference journal article (DOCX or PDF)"),
     document_file: UploadFile = File(..., description="Student's document to check (DOCX or PDF)"),
+    journal_file: UploadFile | None = File(None, description="Reference journal article (DOCX or PDF)"),
+    template_text: str = Form("", description="Plain-text formatting specification (alternative to uploading a journal file)"),
 ) -> FormatMatchResponse:
-    """Upload a reference journal and a student document.
+    """Upload a reference journal (or paste its formatting rules) and a student document.
 
-    Extracts the journal's formatting conventions (heading style, numbering,
-    section order) then walks the student's document to find every mismatch
-    and produce specific, actionable suggestions.
+    When template_text is provided it is used directly as the formatting specification,
+    bypassing file extraction. Otherwise journal_file is required and its heading
+    structure is extracted and compared against the student document.
     """
-    j_bytes = await journal_file.read()
-    d_bytes = await document_file.read()
+    has_text = bool(template_text.strip())
+    if not has_text and journal_file is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide either a journal_file or paste the formatting rules in template_text.",
+        )
 
-    if len(j_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"Journal file exceeds {_FORMAT_MAX_MB} MB.")
+    d_bytes = await document_file.read()
     if len(d_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"Document file exceeds {_FORMAT_MAX_MB} MB.")
 
-    journal_outline = _outline_from_upload(j_bytes, journal_file.filename or "journal.docx")
+    if has_text:
+        journal_outline = template_text.strip()
+        journal_is_spec = True
+    else:
+        j_bytes = await journal_file.read()  # type: ignore[union-attr]
+        if len(j_bytes) > _FORMAT_MAX_MB * 1024 * 1024:
+            raise HTTPException(status_code=413, detail=f"Journal file exceeds {_FORMAT_MAX_MB} MB.")
+        journal_outline = _outline_from_upload(j_bytes, journal_file.filename or "journal.docx")  # type: ignore[union-attr]
+        journal_is_spec = False
+
     document_outline = _outline_from_upload(d_bytes, document_file.filename or "document.docx")
 
-    return format_analyze(journal_outline, document_outline)
+    return format_analyze(journal_outline, document_outline, journal_is_spec)
 
 
 def _copy_journal_styles(journal_bytes: bytes, student_doc) -> None:

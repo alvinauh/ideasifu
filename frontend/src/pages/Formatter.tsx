@@ -198,8 +198,12 @@ function IssueCard({ issue }: { issue: FormatIssue }) {
 
 // ── main page ─────────────────────────────────────────────────────────────────
 
+type ReferenceMode = "file" | "text";
+
 export default function Formatter() {
+  const [refMode, setRefMode] = useState<ReferenceMode>("file");
   const [journalFile, setJournalFile] = useState<File | null>(null);
+  const [templateText, setTemplateText] = useState("");
   const [docFile, setDocFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [transforming, setTransforming] = useState(false);
@@ -207,13 +211,15 @@ export default function Formatter() {
   const [result, setResult] = useState<FormatMatchResponse | null>(null);
   const [showOutline, setShowOutline] = useState(false);
 
+  const refReady = refMode === "file" ? journalFile !== null : templateText.trim().length > 0;
+
   async function analyze() {
-    if (!journalFile || !docFile || loading) return;
+    if (!refReady || !docFile || loading) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const r = await api.formatMatch(journalFile, docFile);
+      const r = await api.formatMatch(docFile, refMode === "file" ? journalFile : null, refMode === "text" ? templateText : "");
       setResult(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed. Please try again.");
@@ -284,19 +290,53 @@ export default function Formatter() {
 
       {/* Upload zone */}
       <section className="card-shadow mb-6 rounded-2xl border border-border bg-surface p-5">
+        {/* Reference mode toggle */}
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-medium text-muted">1. Formatting reference</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setRefMode("file")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none ${
+                refMode === "file"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-surface-2 text-muted hover:border-primary/40"
+              }`}
+            >
+              Upload journal article
+            </button>
+            <button
+              type="button"
+              onClick={() => setRefMode("text")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none ${
+                refMode === "text"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-surface-2 text-muted hover:border-primary/40"
+              }`}
+            >
+              Paste style guide / template
+            </button>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="mb-2 text-sm font-medium text-muted">
-              1. Reference journal{" "}
-              <span className="text-muted/60">(DOCX or PDF)</span>
-            </p>
-            <DropZone
-              label="Drop journal article here"
-              hint="The format you want to match · DOCX or PDF"
-              file={journalFile}
-              onFile={setJournalFile}
-              accept=".docx,.pdf"
-            />
+            {refMode === "file" ? (
+              <DropZone
+                label="Drop journal article here"
+                hint="The format you want to match · DOCX or PDF"
+                file={journalFile}
+                onFile={setJournalFile}
+                accept=".docx,.pdf"
+              />
+            ) : (
+              <textarea
+                value={templateText}
+                onChange={(e) => setTemplateText(e.target.value)}
+                placeholder={"Paste the formatting rules here — e.g. the journal's author guide or template instructions.\n\nExample:\n  Title: bold, 12pt, centred\n  Abstract: max 250 words\n  Headings: ALL CAPS, bold, 11pt\n  References: APA 7th edition"}
+                className="h-full min-h-[180px] w-full rounded-2xl border border-border bg-surface-2 p-4 text-sm text-foreground placeholder:text-muted/50 focus:border-primary focus:outline-none resize-y"
+              />
+            )}
           </div>
           <div>
             <p className="mb-2 text-sm font-medium text-muted">
@@ -316,7 +356,7 @@ export default function Formatter() {
         <button
           type="button"
           onClick={analyze}
-          disabled={!journalFile || !docFile || loading || USING_MOCK}
+          disabled={!refReady || !docFile || loading || USING_MOCK}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-idea py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           {loading ? (

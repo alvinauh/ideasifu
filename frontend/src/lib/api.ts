@@ -147,15 +147,17 @@ export function contribute(req: ContributionRequest): Promise<ContributionResult
 // --- FormatSifu: journal format matching ---
 
 export async function formatMatch(
-  journalFile: File,
   documentFile: File,
+  journalFile: File | null,
+  templateText: string,
 ): Promise<FormatMatchResponse> {
   if (USING_MOCK) {
     return Promise.reject(new Error("Format matching requires the live backend."));
   }
   const form = new FormData();
-  form.append("journal_file", journalFile);
   form.append("document_file", documentFile);
+  if (journalFile) form.append("journal_file", journalFile);
+  if (templateText.trim()) form.append("template_text", templateText.trim());
   const res = await fetch(`${BASE}/format-match`, { method: "POST", body: form });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));

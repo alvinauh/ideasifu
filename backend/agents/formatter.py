@@ -121,18 +121,32 @@ clarification. Number formatting is a high-severity issue; minor label differenc
 are medium; cosmetic things like bold/italic are low."""
 
 
-def analyze(journal_outline: str, document_outline: str) -> FormatMatchResponse:
+def analyze(journal_outline: str, document_outline: str, journal_is_spec: bool = False) -> FormatMatchResponse:
     """Compare document structure to journal format and return issues + suggestions."""
+    if journal_is_spec:
+        ref_label = "FORMATTING SPECIFICATION (plain-language style guide — treat every rule stated here as authoritative)"
+        task_line = (
+            "Analyze the student's document against every formatting rule stated in the specification above. "
+            "The specification is the authoritative source of truth — do not infer conventions; read them directly. "
+            "Identify all mismatches with specific suggestions, list missing sections, "
+            "produce the corrected outline, and give a match score."
+        )
+    else:
+        ref_label = "REFERENCE JOURNAL STRUCTURE"
+        task_line = (
+            "Analyze the student's document against the journal's formatting conventions. "
+            "Identify all mismatches with specific suggestions, list missing sections, "
+            "produce the corrected outline, and give a match score."
+        )
+
     user = (
-        "REFERENCE JOURNAL STRUCTURE:\n"
+        f"{ref_label}:\n"
         f"{journal_outline}\n\n"
         "---\n\n"
         "STUDENT DOCUMENT STRUCTURE:\n"
         f"{document_outline}\n\n"
         "---\n\n"
-        "Analyze the student's document against the journal's formatting conventions. "
-        "Identify all mismatches with specific suggestions, list missing sections, "
-        "produce the corrected outline, and give a match score."
+        f"{task_line}"
     )
 
     out = generate(_SYSTEM, user, _FormatterOutput, max_tokens=8192)
